@@ -33,6 +33,24 @@
     LP.store.set('rx', { band: LP.rx.band, lastVfo });
   }
 
+  /* the trace: where this listener actually keeps their dial. Recorded only
+     in long stays; the band reads it back on the rare days one of the
+     numbers groups is about you. Never announced. */
+  let dwellRec = { f: LP.rx.vfo, t0: performance.now() };
+  function noteDwell() {
+    const dur = performance.now() - dwellRec.t0;
+    if (dur > 20000) {
+      const key = String(Math.round(dwellRec.f));
+      const tr = LP.store.get('trace', {});
+      tr[key] = Math.min(3600000, (Number(tr[key]) || 0) + dur);
+      const keep = Object.keys(tr).sort((a, b) => tr[b] - tr[a]).slice(0, 8);
+      const slim = {};
+      for (const k of keep) slim[k] = tr[k];
+      LP.store.set('trace', slim);
+    }
+  }
+  addEventListener('pagehide', noteDwell);
+
   function reflectDial() {
     const B = LP.band.BANDS[LP.rx.band];
     dial.setAttribute('aria-valuenow', String(Math.round(LP.rx.vfo - B.lo)));
@@ -44,6 +62,10 @@
   function tuneTo(f, coarse, fromCoast) {
     if (!fromCoast && typeof stopCoast === 'function') stopCoast(); /* any deliberate tune catches the flywheel */
     const B = LP.band.BANDS[LP.rx.band];
+    if (Math.abs(f - dwellRec.f) > 0.5) {       /* leaving a spot: bank the stay */
+      noteDwell();
+      dwellRec = { f, t0: performance.now() };
+    }
     LP.rx.vfo = LP.clamp(Math.round(f * 10) / 10, B.lo, B.hi);
     LP.rx.dwellT0 = performance.now();
     reflectDial();

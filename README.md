@@ -1,6 +1,7 @@
 # The Listening Post
 
 **A shortwave receiver at 3 AM. The band is open.**
+**A haunted band you can actually tune.**
 
 An interactive showcase by [Desert Data Labs](https://desertdatalabs.com): a longwave radio room
 rendered entirely in procedural canvas and WebAudio — no frameworks, no images, no audio files.
@@ -26,6 +27,11 @@ empty hall. The traffic runs on the wall clock whether anyone is listening or no
   the date. Hearing it at all is the event
 - and if you hold a quiet frequency long enough, something notices. It drifts toward your dial,
   falls to zero-beat, and asks who was there. Once.
+
+Some listeners keep further notes: a weak signal that never fades while everything around it
+breathes; a room faintly audible behind the buzzer; a station that once keyed its sister's name;
+morse hands that wobble like hands — and one that doesn't. None of this is announced, none of it
+is explained, and all of it ends. Watch the needle.
 
 **Zoom** the window from 48 kHz down to 12 kHz and the keying resolves in the raster — dits and
 dahs become individually legible. The **dial has mass**: fling it and the weighted flywheel coasts,

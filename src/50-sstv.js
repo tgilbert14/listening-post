@@ -16,13 +16,16 @@ LP.sstv = (() => {
   const src = document.createElement('canvas');
   src.width = W; src.height = H;
   const sx = src.getContext('2d');
-  const CAPTIONS = ['THE DUNES, AFTER MIDNIGHT', 'SHE IS STILL UP THERE', 'WE ARE STILL LISTENING'];
+  const CAPTIONS = ['THE DUNES, AFTER MIDNIGHT', 'SHE IS STILL UP THERE', 'WE ARE STILL LISTENING', 'NO ONE AT THE KEY'];
   let luma = null, genIx = -1, painted = 0, lastSeen = 0, announced = false;
+  let curCaption = CAPTIONS[0];
 
   /* ---------- the postcards ---------- */
   function generate(seed) {
     const rnd = LP.mulberry(seed);
-    const motif = seed % 3;
+    /* the fourth card only enters the rotation after the departure */
+    const motifs = (LP.band.present && !LP.band.present()) ? 4 : 3;
+    const motif = seed % motifs;
     /* night sky */
     const g = sx.createLinearGradient(0, 0, 0, H);
     g.addColorStop(0, '#0a1226'); g.addColorStop(.62, '#1a2340'); g.addColorStop(1, '#2c3055');
@@ -79,7 +82,7 @@ LP.sstv = (() => {
       sx.beginPath(); sx.moveTo(0, H);
       for (let x = 0; x <= W; x += 8) sx.lineTo(x, H * 0.8 + Math.sin(x / 37 + seed) * 9);
       sx.lineTo(W, H); sx.closePath(); sx.fill();
-    } else {
+    } else if (motif === 2) {
       /* the mast: a listening post of our own, guyed wires, red lamp */
       sx.fillStyle = '#10142a';
       sx.beginPath(); sx.moveTo(0, H);
@@ -96,15 +99,63 @@ LP.sstv = (() => {
       sx.beginPath(); sx.arc(bx, 44, 3, 0, LP.TAU); sx.fill();
       sx.fillStyle = 'rgba(217,109,90,.28)';
       sx.beginPath(); sx.arc(bx, 44, 9, 0, LP.TAU); sx.fill();
+    } else {
+      /* the room, afterward: lamp lit, the set still on, the chair empty.
+         This card only transmits once the band has gone quiet inside. */
+      sx.fillStyle = '#0b0e16'; sx.fillRect(0, 0, W, H);
+      /* the lamp's cone */
+      const lg = sx.createRadialGradient(76, 42, 4, 76, 42, 170);
+      lg.addColorStop(0, 'rgba(240,214,150,.85)');
+      lg.addColorStop(0.28, 'rgba(190,160,104,.30)');
+      lg.addColorStop(1, 'rgba(0,0,0,0)');
+      sx.fillStyle = lg; sx.fillRect(0, 0, W, H);
+      /* the lamp itself */
+      sx.fillStyle = '#12101c';
+      sx.beginPath(); sx.moveTo(52, 38); sx.lineTo(100, 38); sx.lineTo(88, 16); sx.lineTo(64, 16); sx.closePath(); sx.fill();
+      sx.fillRect(74, 38, 4, 76);
+      /* the desk */
+      sx.fillStyle = '#191423'; sx.fillRect(0, 150, W, 7);
+      sx.fillStyle = '#0e0b16'; sx.fillRect(0, 157, W, H - 157);
+      /* the receiver: dark chassis, one green line still crawling, dial lamp lit */
+      sx.fillStyle = '#0c0f16'; sx.fillRect(128, 100, 138, 50);
+      sx.strokeStyle = '#1e2430'; sx.lineWidth = 1; sx.strokeRect(128.5, 100.5, 138, 50);
+      sx.fillStyle = '#6fdd8b';
+      for (let x = 0; x < 118; x += 2) {
+        const a = 0.25 + 0.75 * Math.abs(Math.sin(x * 0.7 + seed));
+        sx.globalAlpha = a * 0.8;
+        sx.fillRect(138 + x, 112 + Math.sin(x * 1.3) * 1.2, 1.4, 3);
+      }
+      sx.globalAlpha = 1;
+      sx.fillStyle = '#d9a441';
+      sx.fillRect(246, 132, 8, 3);          /* the dial lamp, still warm */
+      sx.fillStyle = 'rgba(217,164,65,.25)';
+      sx.fillRect(240, 126, 20, 15);
+      /* headphones, set down on the desk */
+      sx.strokeStyle = '#232030'; sx.lineWidth = 4;
+      sx.beginPath(); sx.arc(96, 146, 15, Math.PI * 0.95, Math.PI * 2.05); sx.stroke();
+      sx.fillStyle = '#232030';
+      sx.fillRect(80, 142, 7, 10); sx.fillRect(106, 142, 7, 10);
+      /* the key, cocked and quiet */
+      sx.fillStyle = '#1c1826'; sx.fillRect(176, 158, 34, 5);
+      sx.fillStyle = '#2c2438'; sx.fillRect(202, 152, 9, 5);
+      /* the empty chair, foreground right, back to us */
+      sx.fillStyle = '#070510';
+      sx.fillRect(236, 168, 62, 8);
+      sx.fillRect(240, 176, 6, 56);
+      sx.fillRect(288, 176, 6, 56);
+      sx.fillRect(236, 120, 8, 52);          /* the chair back, against the lamp light */
+      sx.fillRect(290, 120, 8, 52);
+      sx.fillRect(236, 116, 62, 8);
     }
     /* caption strip, like a wish-you-were-here card */
+    curCaption = CAPTIONS[motif];
     sx.fillStyle = 'rgba(232,230,218,.92)';
     sx.fillRect(0, H - 18, W, 18);
     sx.fillStyle = '#20242c';
     sx.font = '10px Georgia, serif';
     sx.textAlign = 'center';
-    sx.fillText(CAPTIONS[motif], W / 2, H - 6);
-    cv.setAttribute('aria-label', `Received picture: ${CAPTIONS[motif].toLowerCase()}.`);
+    sx.fillText(curCaption, W / 2, H - 6);
+    cv.setAttribute('aria-label', `Received picture: ${curCaption.toLowerCase()}.`);
 
     /* luma table for the audio */
     const img = sx.getImageData(0, 0, W, H).data;
@@ -174,7 +225,7 @@ LP.sstv = (() => {
       }
       if (painted >= H - 1 && announced !== 'done') {
         announced = 'done';
-        const caption = CAPTIONS[genIx % 3].toLowerCase();
+        const caption = curCaption.toLowerCase();
         LP.say(`Picture received: ${caption}. Pinned to the log.`);
         /* the keepsake: a small JPEG of the developed card, pinned to the
            POSTCARD line so the picture outlives its six-minute cycle */

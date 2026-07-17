@@ -43,6 +43,21 @@ LP.band = (() => {
     }
     return { spans, chars, total: t + (tailMs || 1500) };
   }
+  /* a FIST: a human hand's involuntary timing signature. The same seeded
+     wobble every cycle — recognizable, like a real operator's. Machine-sent
+     morse is the absence of one; perfection is itself a fingerprint. */
+  function humanize(compiled, rnd, unit) {
+    const j = unit * 0.14;
+    const dashBias = 0.92 + rnd() * 0.3;   /* some hands send heavy dashes */
+    compiled.spans = compiled.spans.map(([a, b]) => {
+      let d = b - a;
+      if (d > unit * 2) d *= dashBias;
+      const s = Math.max(0, a + (rnd() - 0.5) * 2 * j);
+      return [s, s + Math.max(unit * 0.4, d + (rnd() - 0.5) * j)];
+    });
+    return compiled;
+  }
+
   /* everything the key has finished saying by time m into the cycle */
   function decodeMorse(compiled, m) {
     let s = '';
@@ -84,17 +99,68 @@ LP.band = (() => {
      plus type params. activity(tMs) -> 0..1 keying, computed on demand. */
   const S = [];
 
-  /* the net: when it fires, every keyed station sends the same three
-     characters in unison, once, from the top, for a new listener */
+  /* ---------- the presence ---------- */
+  /* While THE OTHER has not yet asked its question, something inhabits the
+     band, and the anomalies below are live. Once it is noticed noticing —
+     logged, gone — every one of them ceases, permanently, and the band
+     becomes exactly what it always claimed to be. That is the elegy. */
+  function present() {
+    if (ghost.state === 'gone') return false;
+    return !(LP.log && LP.log.has && LP.log.has('THE OTHER'));
+  }
+
+  /* the net: when it fires, every keyed station sends the same characters in
+     unison, once, from the top, for a new listener. If the band's tenant has
+     already departed, the net is a silent-key net instead: the sign-off SK,
+     keyed by every station at once — in the departed's own fist. */
   const net = { t0: 0, until: 0, m: compileMorse('73 73 73', 14, 2600) };
-  net.arm = () => { net.t0 = Date.now(); net.until = net.t0 + net.m.total; };
+  net.arm = () => {
+    net.m = present()
+      ? compileMorse('73 73 73', 14, 2600)
+      : humanize(compileMorse('73 73 SK', 14, 2600), LP.mulberry(4257), 1200 / 14);
+    net.t0 = Date.now();
+    net.until = net.t0 + net.m.total;
+  };
+
+  /* THE CROSS-READ: some nights, for one message, a beacon keys its sister's
+     ident — the wrong mask, once, corrected next cycle. Never after. */
+  let _cr = { slot: -1 };
+  function crossReadCalc(slot) {
+    if (_cr.slot === slot) return _cr;
+    const r = LP.mulberry(daySeed() * 13 + slot * 7);
+    _cr = { slot, active: r() < 0.22 };
+    if (_cr.active) {
+      const bs = S.filter(s => s.type === 'beacon');
+      _cr.imp = bs[Math.floor(r() * bs.length)];
+      let vi = Math.floor(r() * bs.length);
+      if (bs[vi] === _cr.imp) vi = (vi + 1) % bs.length;
+      _cr.vic = bs[vi];
+      _cr.w0 = slot * 2400000 + 30000 + Math.floor(r() * (2400000 - _cr.vic._m.total - 90000));
+      _cr.w1 = _cr.w0 + _cr.vic._m.total;
+    }
+    return _cr;
+  }
+  function crossRead(st, t) {
+    if (st.type !== 'beacon' || !present()) return null;
+    const c = crossReadCalc(Math.floor(t / 2400000));
+    if (!c.active || c.imp !== st || t < c.w0 || t >= c.w1) return null;
+    return { m: c.vic._m, off: t - c.w0 };
+  }
 
   const beacon = (id, f, band, text, wpm, pitchBias, note) => S.push({
     id, name: id, f, band, type: 'beacon', bw: 0.12, wpm, pitchBias, note,
     _m: compileMorse(text, wpm, 2200), text,
+    /* which compiled pattern is on the air right now: the net outranks the
+       masks (the unison is the tenant's own voice), the mask outranks habit */
+    keyed(t) {
+      if (t >= net.t0 && t < net.until) return { m: net.m, off: t - net.t0 };
+      const x = crossRead(this, t);
+      if (x) return x;
+      return { m: this._m, off: t };
+    },
     activity(t) {
-      if (t >= net.t0 && t < net.until) return morseOn(net.m, t - net.t0) ? 1 : 0;
-      return morseOn(this._m, t) ? 1 : 0;
+      const k = this.keyed(t);
+      return morseOn(k.m, k.off) ? 1 : 0;
     },
   });
 
@@ -102,21 +168,46 @@ LP.band = (() => {
   beacon('KST-2', 9472.0, 2, 'DE KST2 KST2 73 73', 17, 60, 'says goodbye over and over');
   beacon('MRD-8', 9350.0, 2, 'DE MRD8 BCN GRID DM42 DM42', 15, -40, 'a beacon that knows where it lives');
 
-  /* THE LATTICE: a Buzzer. Carrier + rasping buzz; five groups of five,
-     read in tone-digits every other minute, changing daily. */
+  /* THE LATTICE: a Buzzer. Carrier + rasping buzz; a toy music-box ident;
+     five groups of five, read in tone-digits every other minute, changing
+     daily. On rare days, one group is not random: it is the listener's own
+     most-kept frequency, read back in tone-digits — and on those days one
+     note of the music box plays flat. Nothing announces this. */
   S.push({
     id: 'THE LATTICE', name: 'THE LATTICE', f: 6727.0, band: 1, type: 'buzzer', bw: 0.5,
     note: 'five groups of five; different tomorrow',
-    _seed: -1, _g: null,
+    _seed: -1, _g: null, _traceDay: false,
+    /* the ident melody: eight notes, semitones from A4, ends low, unresolved.
+       The detune is fixed per note — a toy's imperfection, not a random one. */
+    MELODY: [7, 10, 9, 5, 7, 3, 2, -5],
+    DETUNE: [4, -3, 6, 0, 5, -4, 3, 7],
     groups() {
       const s = daySeed();
-      if (s !== this._seed) { this._seed = s; this._g = latticeGroups(); }
+      if (s !== this._seed) {
+        this._seed = s;
+        this._g = latticeGroups();
+        this._traceDay = false;
+        /* the group that is about you: rare, seeded, deniable */
+        if (present() && LP.mulberry(s + 99)() < 0.25) {
+          const tr = LP.store.get('trace', {});
+          const top = Object.keys(tr).sort((a, b) => tr[b] - tr[a])[0];
+          if (top) {
+            this._traceDay = true;
+            this._g[3] = String(Math.round(Number(top) * 10)).padStart(5, '0').slice(0, 5);
+          }
+        }
+      }
       return this._g;
     },
-    /* cycle: 120s. 0-84s buzz at 1.25s period; 84-118s the digits, unhurried. */
+    /* cycle: 120s. 0-76s buzz at 1.25s period; 76-84s the music box;
+       84-118s the digits, unhurried. */
     phase(t) {
       const m = t % 120000;
-      if (m < 84000) return { mode: 'buzz', on: (m % 1250) < 820 };
+      if (m < 76000) return { mode: 'buzz', on: (m % 1250) < 820 };
+      if (m < 84000) {
+        const noteIx = Math.floor((m - 76000) / 1000);
+        return { mode: 'musicbox', note: Math.min(7, noteIx), on: ((m - 76000) % 1000) < 700 };
+      }
       const dt = m - 84000;
       const SLOT = 1130; /* 30 slots fill the 84-118s window */
       const digitIx = Math.floor(dt / SLOT);
@@ -134,8 +225,32 @@ LP.band = (() => {
       }
       return { mode: 'gap' };
     },
-    activity(t) { const p = this.phase(t); return p.on ? 1 : (p.mode === 'gap' ? 0 : 0.12); },
+    activity(t) {
+      const p = this.phase(t);
+      if (p.mode === 'musicbox') return p.on ? 0.7 : 0.12;
+      return p.on ? 1 : (p.mode === 'gap' ? 0 : 0.12);
+    },
   });
+
+  /* THE ROOM: the buzzer is an acoustic device in front of a live microphone,
+     and the room it stands in is not empty. Rarely, at low level behind the
+     buzz: a chair, a door, something set down, unintelligible speech, once a
+     phone ringing far away. Wall-clock scheduled — two listeners at the same
+     minute hear the same room, and can ask each other "did you hear it too?"
+     After the departure, the buzz continues. The room is empty now. */
+  function roomEvent(t) {
+    if (!present()) return null;
+    const SLOT = 210000;
+    const slot = Math.floor(t / SLOT);
+    const r = LP.mulberry((daySeed() * 5 + Math.imul(slot, 2654435761)) | 0);
+    if (r() > 0.42) return null;
+    const kinds = ['thud', 'chair', 'door', 'murmur', 'murmur', 'phone'];
+    const kind = kinds[Math.floor(r() * kinds.length)];
+    const t0 = slot * SLOT + 15000 + Math.floor(r() * (SLOT - 45000));
+    const dur = kind === 'murmur' ? 2500 + r() * 2500 : (kind === 'phone' ? 6500 : 1100);
+    if (t < t0 || t >= t0 + dur) return null;
+    return { kind, t0, dur };
+  }
 
   /* THE FORECAST: RTTY, 45 baud FSK. Lock it and the masthead's sub-line
      becomes the decoder, typing out a desert shipping forecast. */
@@ -210,6 +325,25 @@ LP.band = (() => {
     toneHigh(t) { return Math.floor((t % 46000) / 540) % 2 === 0; },
   });
 
+  /* ---------- THE CONSTANT: no distance to it ---------- */
+  /* A weak carrier that keys a single K — the invitation to transmit —
+     forever, machine-perfect. While the band's tenant is present, it does
+     not obey radio: it never fades while everything around it breathes, it
+     does not beat against the BFO (the same pitch at every tuning error, as
+     if it never arrived as radio at all), and it sits dead-center in the
+     stereo image — it is not coming from a direction. The S-meter needle,
+     alone on the band, holds still. Afterward it keys on, but fades like
+     any carrier: the invitation continues; nothing is behind it now. */
+  S.push({
+    id: 'THE CONSTANT', name: 'THE CONSTANT', f: 9512.0, band: 2, type: 'constant', bw: 0.12,
+    note: 'no distance to it',
+    _m: compileMorse('K', 13, 2600),
+    activity(t) {
+      if (t >= net.t0 && t < net.until) return morseOn(net.m, t - net.t0) ? 1 : 0;
+      return morseOn(this._m, t) ? 1 : 0;
+    },
+  });
+
   /* ---------- the underbrush: the band is INHABITED ---------- */
   /* Dozens of minor signals seeded fresh each day — weak CW ragchews,
      drifting carriers, splatter. Not loggable, never named: they exist so
@@ -243,6 +377,10 @@ LP.band = (() => {
           m._m = rnd() < 0.4
             ? compileMorse(`${other} DE ${call} R R TNX FER RPRT 73`, m.wpm, 6000 + rnd() * 8000)
             : compileMorse(`CQ CQ DE ${call} ${call} K`, m.wpm, 4000 + rnd() * 9000);
+          /* every human hand has a fist — a repeatable timing wobble, visible
+             at the 12 kHz zoom. The named beacons key clean (they are
+             machines); the one signal with NO fist and NO fade is the tell. */
+          humanize(m._m, rnd, 1200 / m.wpm);
         }
         list.push(m);
       }
@@ -285,6 +423,11 @@ LP.band = (() => {
   }
   function strength(st, t) {
     if (st.isOn && !st.isOn()) return 0;   /* any station may keep its own hours */
+    /* THE CONSTANT, while the tenant is present, has no distance: no QSB, no
+       day/night curve, the same strength for every listener on Earth. Every
+       log of it carries the identical report. Afterward, it fades like
+       anything — the body remains; the tenant left. */
+    if (st.type === 'constant' && present()) return 0.42;
     return LP.clamp(fade(st, t) * bandFactor(st.band), 0.08, 1);
   }
 
@@ -294,7 +437,9 @@ LP.band = (() => {
   const ghost = {
     state: 'asleep',      /* asleep | approaching | holding | asking | gone */
     f: 0, t0: 0, heard: false,
-    _m: compileMorse('QRZ? QRZ?', 12, 400),
+    /* its one question is keyed with a HAND — the same seeded fist the
+       silent-key net will one day reproduce, band-wide, in its memory */
+    _m: humanize(compileMorse('QRZ? QRZ?', 12, 400), LP.mulberry(4257), 100),
     tune(vfo, dwellMs, nearStation, dt = 16.7) {
       if (this.state === 'gone' || document.hidden) return;
       const t = performance.now();
@@ -414,9 +559,11 @@ LP.band = (() => {
 
   /* keying edges for lookahead audio scheduling: [{t (wall ms), on}] inside [t0..t1] */
   function keyEdges(st, t0, t1) {
-    const useNet = t0 >= net.t0 && t0 < net.until;
-    const m = useNet ? net.m : st._m;
-    const base = useNet ? net.t0 : 0;
+    const k = st.keyed ? st.keyed(t0)
+      : (t0 >= net.t0 && t0 < net.until) ? { m: net.m, off: t0 - net.t0 }
+        : { m: st._m, off: t0 };
+    const m = k.m;
+    const base = t0 - k.off;
     const edges = [];
     const from = t0 - base, to = t1 - base;
     for (let cycle = Math.floor(from / m.total) * m.total; cycle < to; cycle += m.total) {
@@ -434,6 +581,7 @@ LP.band = (() => {
     BANDS, stations: S, strength, spectrumRow, ghost, latticeGroups,
     compileMorse, morseOn, decodeMorse, sferic, net, keyEdges,
     minors, minorActive, minorF, minorStrength,
+    present, roomEvent, crossRead,
   };
 })();
 

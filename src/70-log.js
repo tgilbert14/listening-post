@@ -39,7 +39,7 @@ LP.log = (() => {
     const sel = Math.exp(-(off * off) / (2 * Math.pow(Math.max(st.bw, 0.35) * 0.9, 2)));
     const s = LP.clamp(Math.round(1 + LP.band.strength(st, t) * sel * 8), 1, 9);
     const r = LP.clamp(Math.round(2 + sel * 3), 1, 5);
-    const cw = st.type === 'beacon' || st.type === 'crossing';
+    const cw = st.type === 'beacon' || st.type === 'crossing' || st.type === 'constant';
     return cw ? `${r}${s}9` : `${r}${s}`;
   }
 

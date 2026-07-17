@@ -100,7 +100,7 @@ LP.audio = (() => {
     };
 
     v.aux = v.aux || [];
-    if (st.type === 'beacon' || st.type === 'ghostcw') {
+    if (st.type === 'beacon' || st.type === 'ghostcw' || st.type === 'constant') {
       v.o = osc('sine', 600);
       v.o.connect(g);
     } else if (st.type === 'buzzer') {
@@ -245,6 +245,22 @@ LP.audio = (() => {
         for (const e of LP.band.keyEdges(st, t, t + 330)) {
           gg.setTargetAtTime(e.on ? lvl : 0, now + Math.max(0.001, (e.t - t) / 1000), 0.008);
         }
+      } else if (st.type === 'constant') {
+        /* while the tenant is present it does not obey the BFO: the same
+           pitch at every tuning error (it never arrived as radio), and a
+           dead-center stereo image (it is not coming from a direction).
+           Afterward: an ordinary beacon, at last. */
+        const here = LP.band.present();
+        const pitch = here ? 470 : LP.clamp(300 + Math.abs(off) * 1000, 220, 1900);
+        v.o.frequency.setTargetAtTime(pitch, now, 0.03);
+        if (v.pan) v.pan.pan.setTargetAtTime(here ? 0 : LP.clamp((st.f - rx.vfo) / 3.5, -0.75, 0.75), now, 0.08);
+        const lvl = str * sel * 0.30;
+        const gg = v.g.gain;
+        gg.cancelScheduledValues(now);
+        gg.setTargetAtTime(st.activity(t) > 0 ? lvl : 0, now, K);
+        for (const e of LP.band.keyEdges(st, t, t + 330)) {
+          gg.setTargetAtTime(e.on ? lvl : 0, now + Math.max(0.001, (e.t - t) / 1000), 0.008);
+        }
       } else if (st.type === 'buzzer') {
         const p = st.phase(t);
         v.g.gain.setTargetAtTime(str * sel * 0.26, now, K);
@@ -254,6 +270,24 @@ LP.audio = (() => {
           v.digitG.gain.setTargetAtTime(0.55, now, K);
         } else {
           v.digitG.gain.setTargetAtTime(0, now, K);
+        }
+        /* the music box: a toy ident before the digits, each note struck
+           once. On the days the numbers are about you, note six plays flat. */
+        if (p.mode === 'musicbox') {
+          if (p.on && p.note !== v._mbLast) {
+            v._mbLast = p.note;
+            let cents = st.DETUNE[p.note];
+            if (st._traceDay && p.note === 5) cents -= 60;   /* the flat note is the flag */
+            const f0 = 440 * Math.pow(2, (st.MELODY[p.note] + cents / 100) / 12);
+            bell(v.g, f0, str * sel * 0.34);
+          }
+        } else v._mbLast = -1;
+        /* the room behind the buzzer: rare, low, and shared — the schedule
+           is wall-clock, so two listeners hear the same chair scrape */
+        const ev = LP.band.roomEvent(t);
+        if (ev && v._roomT0 !== ev.t0) {
+          v._roomT0 = ev.t0;
+          roomSound(ev, v.g, str * sel);
         }
       } else if (st.type === 'rtty') {
         v.g.gain.setTargetAtTime(vol * 0.16, now, K);
@@ -359,6 +393,109 @@ LP.audio = (() => {
     noiseGain.gain.setTargetAtTime(0.028 + 0.05 * (1 - Math.min(1, smeter * 1.6)), now, 0.2);
     const sf = LP.band.sferic;
     crashGain.gain.setTargetAtTime(t < sf.until ? sf.level * 0.16 : 0, now, 0.02);
+  }
+
+  /* a music-box tine: fundamental + one inharmonic partial (2.756x, the
+     bell ratio), fast attack, long die-away. A toy, slightly out of true. */
+  function bell(dest, f0, amp) {
+    const now = ctx.currentTime;
+    for (const [ratio, a, dur] of [[1, amp, 1.5], [2.756, amp * 0.3, 0.6]]) {
+      const o = ctx.createOscillator();
+      o.type = 'sine'; o.frequency.value = f0 * ratio;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.exponentialRampToValueAtTime(Math.max(0.001, a), now + 0.008);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+      o.connect(g).connect(dest);
+      o.start(now); o.stop(now + dur + 0.1);
+      o.onended = () => { try { o.disconnect(); g.disconnect(); } catch { } };
+    }
+  }
+
+  /* THE ROOM: one-shot acoustic events behind the buzzer, low in the mix.
+     All synthesized; the murmur is formant-filtered pitch-contour syllables
+     — someone talking in the next room, never intelligibly. */
+  function roomSound(ev, dest, lvl) {
+    const now = ctx.currentTime;
+    const amp = LP.clamp(lvl, 0, 1);
+    const dead = (n, tEnd) => { n.onended = () => { try { n.disconnect(); } catch { } }; };
+    const thump = (at, f, a, d) => {
+      const o = ctx.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(f, at);
+      o.frequency.exponentialRampToValueAtTime(Math.max(30, f * 0.55), at + d);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, at);
+      g.gain.exponentialRampToValueAtTime(a, at + 0.006);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + d);
+      o.connect(g).connect(dest);
+      o.start(at); o.stop(at + d + 0.05); dead(o);
+    };
+    if (ev.kind === 'thud') {
+      thump(now, 68, amp * 0.10, 0.28);
+    } else if (ev.kind === 'door') {
+      thump(now, 75, amp * 0.08, 0.2);
+      thump(now + 0.22, 62, amp * 0.10, 0.3);
+      /* the latch: a tiny high click */
+      thump(now + 0.55, 900, amp * 0.03, 0.03);
+    } else if (ev.kind === 'chair') {
+      /* wood under strain: a narrow-band squeal sliding down */
+      const o = ctx.createOscillator(); o.type = 'sawtooth';
+      o.frequency.setValueAtTime(130, now);
+      o.frequency.exponentialRampToValueAtTime(72, now + 0.55);
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass'; bp.frequency.value = 340; bp.Q.value = 5;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.exponentialRampToValueAtTime(amp * 0.05, now + 0.08);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + 0.6);
+      o.connect(bp).connect(g).connect(dest);
+      o.start(now); o.stop(now + 0.7); dead(o);
+    } else if (ev.kind === 'phone') {
+      /* a telephone far down a hallway: two rings, heavily softened */
+      for (let ring = 0; ring < 2; ring++) {
+        const at = now + ring * 2.6;
+        for (const f of [652, 802]) {
+          const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+          const trem = ctx.createOscillator(); trem.type = 'square'; trem.frequency.value = 21;
+          const tg = ctx.createGain(); tg.gain.value = amp * 0.008; /* ring warble, shallower than the level */
+          const g = ctx.createGain(); g.gain.value = 0;
+          const lp2 = ctx.createBiquadFilter(); lp2.type = 'lowpass'; lp2.frequency.value = 1100;
+          trem.connect(tg).connect(g.gain);
+          g.gain.setValueAtTime(0.0001, at);
+          g.gain.linearRampToValueAtTime(amp * 0.018, at + 0.05);
+          g.gain.setValueAtTime(amp * 0.018, at + 1.0);
+          g.gain.linearRampToValueAtTime(0.0001, at + 1.1);
+          o.connect(g).connect(lp2).connect(dest);
+          o.start(at); o.stop(at + 1.2); trem.start(at); trem.stop(at + 1.2);
+          dead(o); dead(trem);
+        }
+      }
+    } else { /* murmur: speech in the next room */
+      const rnd = LP.mulberry(ev.t0 | 0);
+      const o = ctx.createOscillator(); o.type = 'sawtooth';
+      const f1 = ctx.createBiquadFilter(); f1.type = 'bandpass'; f1.frequency.value = 480; f1.Q.value = 5;
+      const f2 = ctx.createBiquadFilter(); f2.type = 'bandpass'; f2.frequency.value = 1450; f2.Q.value = 6;
+      const mix = ctx.createGain(); mix.gain.value = 1;
+      const f2g = ctx.createGain(); f2g.gain.value = 0.4;
+      const wall = ctx.createBiquadFilter(); wall.type = 'lowpass'; wall.frequency.value = 820;
+      const g = ctx.createGain(); g.gain.value = 0;
+      o.connect(f1).connect(mix);
+      o.connect(f2).connect(f2g).connect(mix);
+      mix.connect(wall).connect(g).connect(dest);
+      const syllables = 4 + Math.floor(rnd() * 5);
+      let at = now + 0.1;
+      for (let s = 0; s < syllables; s++) {
+        const dur = 0.12 + rnd() * 0.12;
+        o.frequency.setValueAtTime(96 + rnd() * 34, at);
+        f1.frequency.setValueAtTime(380 + rnd() * 260, at);
+        f2.frequency.setValueAtTime(1200 + rnd() * 700, at);
+        g.gain.setValueAtTime(0.0001, at);
+        g.gain.exponentialRampToValueAtTime(amp * (0.028 + rnd() * 0.02), at + 0.03);
+        g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+        at += dur + 0.05 + rnd() * 0.1;
+      }
+      o.start(now); o.stop(at + 0.2); dead(o);
+    }
   }
 
   /* the band switch throws a physical relay: a click transient over a low

@@ -202,10 +202,13 @@ LP.display = (() => {
       }
     } else if (lock) {
       /* lock any CW station and the masthead becomes the decoder — the text
-         appears character by character, in sync with the keying you hear */
+         appears character by character, in sync with the keying you hear.
+         It decodes whatever is actually on the air: during a cross-read the
+         sub-line types the WRONG ident under the right nameplate. */
       const st = LP.band.stations.find(s => s.id === lock);
       if (st && st._m && st._m.chars) {
-        const s = LP.band.decodeMorse(st._m, t % st._m.total);
+        const k = st.keyed ? st.keyed(t) : { m: st._m, off: t };
+        const s = LP.band.decodeMorse(k.m, k.off % k.m.total);
         subEl.textContent = s.slice(-44) || '·';
         decoding = true;
         return;
