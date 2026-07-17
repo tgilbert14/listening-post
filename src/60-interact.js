@@ -161,8 +161,22 @@
   logBtn.addEventListener('click', () => toggleLog());
   LP.toggleLog = toggleLog;
 
+  /* ---------- the operator's card ---------- */
+  const cardBtn = document.getElementById('card-toggle');
+  const card = document.getElementById('opcard');
+  const cardClose = document.getElementById('card-close');
+  function showCard(open) {
+    card.hidden = !open;
+    cardBtn.setAttribute('aria-expanded', String(open));
+    if (open) cardClose.focus();
+  }
+  cardBtn.addEventListener('click', () => showCard(card.hidden));
+  cardClose.addEventListener('click', () => showCard(false));
+  LP.showCard = showCard;
+
   /* ---------- bare keys ---------- */
   addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !card.hidden) { showCard(false); return; }
     if (e.key === 'Escape' && !document.getElementById('logbook').hidden) { toggleLog(false); return; }
     if (e.target instanceof HTMLElement && ['BUTTON', 'INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
     if (e.target === dial) return; /* the dial has its own map */

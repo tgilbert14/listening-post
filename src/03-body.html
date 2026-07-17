@@ -12,7 +12,10 @@
   </div>
 
   <div class="panel">
-    <p class="freq" id="freq" aria-hidden="true">— <span class="khz">kHz</span></p>
+    <div class="freq-stack">
+      <p class="freq" id="freq" aria-hidden="true">— <span class="khz">kHz</span></p>
+      <p class="station-id" id="station-id" aria-hidden="true"></p>
+    </div>
 
     <div id="dial" role="slider" tabindex="0" aria-label="Tuning dial"
          aria-valuemin="0" aria-valuemax="240" aria-valuenow="120"
@@ -27,9 +30,26 @@
     <div class="side">
       <canvas id="smeter" aria-hidden="true"></canvas>
       <button class="chip" id="log-toggle" disabled aria-expanded="false" aria-controls="logbook">Log</button>
+      <button class="chip" id="card-toggle" disabled aria-expanded="false" aria-controls="opcard">Card</button>
       <button class="chip" id="sound-toggle" disabled aria-pressed="false">Sound</button>
     </div>
   </div>
+
+  <section class="opcard" id="opcard" aria-label="Operator's card" hidden>
+    <div class="qsl">
+      <h2>The Listening Post</h2>
+      <p class="what">A shortwave receiver. Everything on it is transmitting <em>right now</em> — nothing is recorded.</p>
+      <ul>
+        <li><strong>Tune</strong> — drag the glass or the dial strip. The wheel is fine tuning. Arrow keys work.</li>
+        <li><strong>Bright lines are stations.</strong> Hold one and it gets pencilled into the log (<kbd>L</kbd>).</li>
+        <li><strong>Three bands</strong> — <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>. The strip at the top of the glass is the whole band; tap it to jump.</li>
+        <li>Some of the band only wakes after dark. <em>Your</em> dark.</li>
+        <li>And if a quiet frequency is held long enough… hold it and see.</li>
+      </ul>
+      <p class="sig">— the last operator</p>
+      <button id="card-close" class="qsl-close">Back to the band</button>
+    </div>
+  </section>
 
   <aside class="develop" id="develop" aria-label="Picture decoder" hidden>
     <canvas id="sstv" width="320" height="240" role="img" aria-label="No picture received yet."></canvas>

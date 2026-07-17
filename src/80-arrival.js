@@ -11,10 +11,11 @@
 
     if (!LP.rm.matches) {
       setTimeout(() => document.body.classList.remove('arriving'), 900);
-      /* first visit only: the set glides the last nudge into the music —
-         the dial teaches itself, no words needed */
+      /* first visit only: the operator's card is clipped to the rig, and the
+         set glides the last nudge into the music — the dial teaches itself */
       if (!LP.store.get('visited', false)) {
         LP.store.set('visited', true);
+        setTimeout(() => { if (LP.showCard) LP.showCard(true); }, 1200);
         const from = LP.rx.vfo - 9, to = LP.rx.vfo;
         const t0 = performance.now();
         const glide = () => {

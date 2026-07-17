@@ -185,6 +185,12 @@ LP.display = (() => {
     if (lock !== lastLock) {
       lastLock = lock;
       freqEl.classList.toggle('locked', !!lock);
+      /* the nameplate: the set tells you what you are hearing */
+      const idEl = document.getElementById('station-id');
+      if (idEl) {
+        if (lock) idEl.textContent = lock;
+        idEl.classList.toggle('on', !!lock);
+      }
       if (LP.reflectDial) LP.reflectDial();               /* the slider's valuetext carries the signal */
       if (lock) LP.say(`Signal: ${lock}.`);
     }
