@@ -88,7 +88,6 @@ LP.log = (() => {
     const gh = LP.band.ghost;
     if (gh.state === 'asking' && Math.abs(LP.rx.vfo - gh.f) < 0.4) {
       add('THE OTHER', gh.f, 'it asked who was there', 'net');
-      gh.heard = true;
     }
     lastCheckT = t;
   }

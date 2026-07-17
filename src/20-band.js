@@ -24,6 +24,7 @@ LP.band = (() => {
   function compileMorse(text, wpm, tailMs) {
     const unit = 1200 / wpm;
     const spans = []; /* {on, t0, t1} flattened to on-intervals */
+    const chars = []; /* {ch, end} — so a decoder can read along with the key */
     let t = 0;
     for (const word of text.toUpperCase().split(' ')) {
       for (const ch of word) {
@@ -34,11 +35,22 @@ LP.band = (() => {
           spans.push([t, t + d]);
           t += d + unit;
         }
+        chars.push({ ch, end: t + unit });
         t += unit * 2; /* char gap = 3 total */
       }
+      chars.push({ ch: ' ', end: t + unit * 2 });
       t += unit * 4;   /* word gap = 7 total */
     }
-    return { spans, total: t + (tailMs || 1500) };
+    return { spans, chars, total: t + (tailMs || 1500) };
+  }
+  /* everything the key has finished saying by time m into the cycle */
+  function decodeMorse(compiled, m) {
+    let s = '';
+    for (const c of compiled.chars) {
+      if (c.end > m) break;
+      s += c.ch;
+    }
+    return s;
   }
   function morseOn(compiled, tMs) {
     const m = tMs % compiled.total;
@@ -178,7 +190,18 @@ LP.band = (() => {
     },
   });
 
-  /* ---------- propagation: slow QSB fading, per station ---------- */
+  /* ---------- propagation ---------- */
+  /* real HF behavior, played straight: the low band carries at night, the
+     high band by day, the middle hardly cares. The ionosphere is the game. */
+  function bandFactor(bandIx) {
+    const d = new Date();
+    const h = d.getHours() + d.getMinutes() / 60;
+    const day = 0.5 + 0.5 * Math.cos(((h - 13) / 24) * 2 * Math.PI); /* 1 at 13:00, 0 at 01:00 */
+    if (bandIx === 0) return 0.55 + 0.45 * (1 - day);  /* GROUND: a night band */
+    if (bandIx === 2) return 0.55 + 0.45 * day;        /* HIGH: a day band */
+    return 0.92;                                        /* SKY: the reliable middle */
+  }
+  /* slow QSB fading, per station */
   function fade(st, t) {
     const seed = st.f * 7.3;
     return 0.62
@@ -187,7 +210,7 @@ LP.band = (() => {
   }
   function strength(st, t) {
     if (st.type === 'night' && !st.isOn()) return 0;
-    return LP.clamp(fade(st, t), 0.12, 1);
+    return LP.clamp(fade(st, t) * bandFactor(st.band), 0.08, 1);
   }
 
   /* ---------- the ghost ---------- */
@@ -321,7 +344,7 @@ LP.band = (() => {
     return edges.filter(e => e.t >= t0 && e.t <= t1);
   }
 
-  return { BANDS, stations: S, strength, spectrumRow, ghost, latticeGroups, compileMorse, morseOn, sferic, net, keyEdges };
+  return { BANDS, stations: S, strength, spectrumRow, ghost, latticeGroups, compileMorse, morseOn, decodeMorse, sferic, net, keyEdges };
 })();
 
 /* the receiver state: one VFO, one band. Arrival parks it a nudge below

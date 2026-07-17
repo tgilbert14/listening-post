@@ -16,7 +16,9 @@ LP.audio = (() => {
 
   function build() {
     if (ctx) return;
-    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    try {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+    } catch { ctx = null; return; } /* a silent set beats a console fire */
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -20; comp.knee.value = 22; comp.ratio.value = 5;
     master = ctx.createGain();
@@ -61,13 +63,14 @@ LP.audio = (() => {
   function arm() {
     if (!enabled) return;
     build();
+    if (!ctx) return;
     if (ctx.state !== 'running') ctx.resume().then(reflect).catch(reflect);
     else reflect();
   }
   function toggle() {
     enabled = !enabled;
     LP.store.set('sound', enabled);
-    if (enabled) { build(); ctx.resume().then(reflect).catch(reflect); LP.say('Sound on.'); }
+    if (enabled) { build(); if (ctx) ctx.resume().then(reflect).catch(reflect); LP.say('Sound on.'); }
     else { if (ctx) ctx.suspend(); reflect(); LP.say('Sound off.'); }
   }
   if (chip) chip.addEventListener('click', toggle);
@@ -77,8 +80,17 @@ LP.audio = (() => {
   /* ---------- voices ---------- */
   function mkVoice(st) {
     const g = ctx.createGain(); g.gain.value = 0;
-    g.connect(master);
-    const v = { g, st, nodes: [] };
+    /* the band has a stereo image: a station below your dial sits left,
+       above sits right — turn the knob and the room turns with you */
+    let pan = null;
+    if (ctx.createStereoPanner) {
+      pan = ctx.createStereoPanner();
+      g.connect(pan).connect(master);
+    } else {
+      g.connect(master);
+    }
+    const v = { g, pan, st, nodes: [] };
+    if (pan) (v.aux = v.aux || []).push(pan);
     const osc = (type, freq) => {
       const o = ctx.createOscillator();
       o.type = type; o.frequency.value = freq;
@@ -187,6 +199,7 @@ LP.audio = (() => {
       /* selectivity: how much of it lands in the passband */
       const sel = Math.exp(-(off * off) / (2 * Math.pow(Math.max(st.bw, 0.35) * 0.9, 2)));
       let vol = act * str * sel;
+      if (v.pan) v.pan.pan.setTargetAtTime(LP.clamp((st.f - rx.vfo) / 3.5, -0.75, 0.75), now, 0.08);
 
       if (st.type === 'beacon') {
         /* CW against the BFO: pitch IS your tuning error (1 kHz off = 1 kHz beat,
@@ -262,6 +275,7 @@ LP.audio = (() => {
       let v = voices.get('THE OTHER');
       if (!v) { v = mkVoice({ type: 'ghostcw', id: 'THE OTHER' }); voices.set('THE OTHER', v); }
       const off = Math.abs(LP.rx.vfo - gh.f);
+      if (v.pan) v.pan.pan.setTargetAtTime(LP.clamp((gh.f - LP.rx.vfo) / 3.5, -0.75, 0.75), now, 0.08);
       if (gh.state === 'asking') {
         v.o.frequency.setTargetAtTime(478, now, 0.02);
         v.g.gain.setTargetAtTime(gh.activity(t) * 0.24, now, K);

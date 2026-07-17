@@ -179,7 +179,8 @@ LP.display = (() => {
     lastDecode = t;
     const subEl = document.getElementById('sub-line');
     if (!subEl) return;
-    if (LP.log.lockedOn === 'THE FORECAST') {
+    const lock = LP.log.lockedOn;
+    if (lock === 'THE FORECAST') {
       const st = LP.band.stations.find(s => s.type === 'rtty');
       const m = t % 34000;
       if (m < 30000) {
@@ -187,6 +188,16 @@ LP.display = (() => {
         const txt = st.text;
         const from = Math.max(0, n - 42);
         subEl.textContent = txt.slice(from, n % (txt.length + 1)) || '·';
+        decoding = true;
+        return;
+      }
+    } else if (lock) {
+      /* lock any CW station and the masthead becomes the decoder — the text
+         appears character by character, in sync with the keying you hear */
+      const st = LP.band.stations.find(s => s.id === lock);
+      if (st && st._m && st._m.chars) {
+        const s = LP.band.decodeMorse(st._m, t % st._m.total);
+        subEl.textContent = s.slice(-44) || '·';
         decoding = true;
         return;
       }

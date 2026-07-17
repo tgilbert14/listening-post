@@ -564,6 +564,7 @@ LP.band = (() => {
   function compileMorse(text, wpm, tailMs) {
     const unit = 1200 / wpm;
     const spans = []; /* {on, t0, t1} flattened to on-intervals */
+    const chars = []; /* {ch, end} — so a decoder can read along with the key */
     let t = 0;
     for (const word of text.toUpperCase().split(' ')) {
       for (const ch of word) {
@@ -574,11 +575,22 @@ LP.band = (() => {
           spans.push([t, t + d]);
           t += d + unit;
         }
+        chars.push({ ch, end: t + unit });
         t += unit * 2; /* char gap = 3 total */
       }
+      chars.push({ ch: ' ', end: t + unit * 2 });
       t += unit * 4;   /* word gap = 7 total */
     }
-    return { spans, total: t + (tailMs || 1500) };
+    return { spans, chars, total: t + (tailMs || 1500) };
+  }
+  /* everything the key has finished saying by time m into the cycle */
+  function decodeMorse(compiled, m) {
+    let s = '';
+    for (const c of compiled.chars) {
+      if (c.end > m) break;
+      s += c.ch;
+    }
+    return s;
   }
   function morseOn(compiled, tMs) {
     const m = tMs % compiled.total;
@@ -718,7 +730,18 @@ LP.band = (() => {
     },
   });
 
-  /* ---------- propagation: slow QSB fading, per station ---------- */
+  /* ---------- propagation ---------- */
+  /* real HF behavior, played straight: the low band carries at night, the
+     high band by day, the middle hardly cares. The ionosphere is the game. */
+  function bandFactor(bandIx) {
+    const d = new Date();
+    const h = d.getHours() + d.getMinutes() / 60;
+    const day = 0.5 + 0.5 * Math.cos(((h - 13) / 24) * 2 * Math.PI); /* 1 at 13:00, 0 at 01:00 */
+    if (bandIx === 0) return 0.55 + 0.45 * (1 - day);  /* GROUND: a night band */
+    if (bandIx === 2) return 0.55 + 0.45 * day;        /* HIGH: a day band */
+    return 0.92;                                        /* SKY: the reliable middle */
+  }
+  /* slow QSB fading, per station */
   function fade(st, t) {
     const seed = st.f * 7.3;
     return 0.62
@@ -727,7 +750,7 @@ LP.band = (() => {
   }
   function strength(st, t) {
     if (st.type === 'night' && !st.isOn()) return 0;
-    return LP.clamp(fade(st, t), 0.12, 1);
+    return LP.clamp(fade(st, t) * bandFactor(st.band), 0.08, 1);
   }
 
   /* ---------- the ghost ---------- */
@@ -861,7 +884,7 @@ LP.band = (() => {
     return edges.filter(e => e.t >= t0 && e.t <= t1);
   }
 
-  return { BANDS, stations: S, strength, spectrumRow, ghost, latticeGroups, compileMorse, morseOn, sferic, net, keyEdges };
+  return { BANDS, stations: S, strength, spectrumRow, ghost, latticeGroups, compileMorse, morseOn, decodeMorse, sferic, net, keyEdges };
 })();
 
 /* the receiver state: one VFO, one band. Arrival parks it a nudge below
@@ -888,7 +911,9 @@ LP.audio = (() => {
 
   function build() {
     if (ctx) return;
-    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    try {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+    } catch { ctx = null; return; } /* a silent set beats a console fire */
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -20; comp.knee.value = 22; comp.ratio.value = 5;
     master = ctx.createGain();
@@ -933,13 +958,14 @@ LP.audio = (() => {
   function arm() {
     if (!enabled) return;
     build();
+    if (!ctx) return;
     if (ctx.state !== 'running') ctx.resume().then(reflect).catch(reflect);
     else reflect();
   }
   function toggle() {
     enabled = !enabled;
     LP.store.set('sound', enabled);
-    if (enabled) { build(); ctx.resume().then(reflect).catch(reflect); LP.say('Sound on.'); }
+    if (enabled) { build(); if (ctx) ctx.resume().then(reflect).catch(reflect); LP.say('Sound on.'); }
     else { if (ctx) ctx.suspend(); reflect(); LP.say('Sound off.'); }
   }
   if (chip) chip.addEventListener('click', toggle);
@@ -949,8 +975,17 @@ LP.audio = (() => {
   /* ---------- voices ---------- */
   function mkVoice(st) {
     const g = ctx.createGain(); g.gain.value = 0;
-    g.connect(master);
-    const v = { g, st, nodes: [] };
+    /* the band has a stereo image: a station below your dial sits left,
+       above sits right — turn the knob and the room turns with you */
+    let pan = null;
+    if (ctx.createStereoPanner) {
+      pan = ctx.createStereoPanner();
+      g.connect(pan).connect(master);
+    } else {
+      g.connect(master);
+    }
+    const v = { g, pan, st, nodes: [] };
+    if (pan) (v.aux = v.aux || []).push(pan);
     const osc = (type, freq) => {
       const o = ctx.createOscillator();
       o.type = type; o.frequency.value = freq;
@@ -1059,6 +1094,7 @@ LP.audio = (() => {
       /* selectivity: how much of it lands in the passband */
       const sel = Math.exp(-(off * off) / (2 * Math.pow(Math.max(st.bw, 0.35) * 0.9, 2)));
       let vol = act * str * sel;
+      if (v.pan) v.pan.pan.setTargetAtTime(LP.clamp((st.f - rx.vfo) / 3.5, -0.75, 0.75), now, 0.08);
 
       if (st.type === 'beacon') {
         /* CW against the BFO: pitch IS your tuning error (1 kHz off = 1 kHz beat,
@@ -1134,6 +1170,7 @@ LP.audio = (() => {
       let v = voices.get('THE OTHER');
       if (!v) { v = mkVoice({ type: 'ghostcw', id: 'THE OTHER' }); voices.set('THE OTHER', v); }
       const off = Math.abs(LP.rx.vfo - gh.f);
+      if (v.pan) v.pan.pan.setTargetAtTime(LP.clamp((gh.f - LP.rx.vfo) / 3.5, -0.75, 0.75), now, 0.08);
       if (gh.state === 'asking') {
         v.o.frequency.setTargetAtTime(478, now, 0.02);
         v.g.gain.setTargetAtTime(gh.activity(t) * 0.24, now, K);
@@ -1356,7 +1393,8 @@ LP.display = (() => {
     lastDecode = t;
     const subEl = document.getElementById('sub-line');
     if (!subEl) return;
-    if (LP.log.lockedOn === 'THE FORECAST') {
+    const lock = LP.log.lockedOn;
+    if (lock === 'THE FORECAST') {
       const st = LP.band.stations.find(s => s.type === 'rtty');
       const m = t % 34000;
       if (m < 30000) {
@@ -1364,6 +1402,16 @@ LP.display = (() => {
         const txt = st.text;
         const from = Math.max(0, n - 42);
         subEl.textContent = txt.slice(from, n % (txt.length + 1)) || '·';
+        decoding = true;
+        return;
+      }
+    } else if (lock) {
+      /* lock any CW station and the masthead becomes the decoder — the text
+         appears character by character, in sync with the keying you hear */
+      const st = LP.band.stations.find(s => s.id === lock);
+      if (st && st._m && st._m.chars) {
+        const s = LP.band.decodeMorse(st._m, t % st._m.total);
+        subEl.textContent = s.slice(-44) || '·';
         decoding = true;
         return;
       }
@@ -1947,7 +1995,6 @@ LP.log = (() => {
     const gh = LP.band.ghost;
     if (gh.state === 'asking' && Math.abs(LP.rx.vfo - gh.f) < 0.4) {
       add('THE OTHER', gh.f, 'it asked who was there', 'net');
-      gh.heard = true;
     }
     lastCheckT = t;
   }

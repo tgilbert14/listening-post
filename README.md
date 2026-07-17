@@ -52,7 +52,7 @@ sstv → interact → log → arrival. The build fails loudly if any `__PLACEHOL
 - One model, two renderings: every station's keying function drives both the spectrum paint
   and the audio voice. Nothing is faked separately.
 - All traffic is anchored to the wall clock: the numbers change daily, the SSTV cycle is
-  shared by every listener, the night station keeps YOUR local night (nine to six).
+  shared by every listener, the night station keeps YOUR local night (nine to six) — and the ionosphere is real: the low band carries after dark, the high band by day.
 - No JS = a complete brochure. Reduced motion = the scroll becomes a still spectrum graph,
   redrawn gently. Forced colors keep chip state on borders.
 - Every interaction is keyboard-reachable; the dial is a real slider with value text; a polite
