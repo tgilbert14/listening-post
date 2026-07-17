@@ -174,7 +174,17 @@ LP.sstv = (() => {
       }
       if (painted >= H - 1 && announced !== 'done') {
         announced = 'done';
-        LP.say(`Picture received: ${CAPTIONS[genIx % 3].toLowerCase()}.`);
+        const caption = CAPTIONS[genIx % 3].toLowerCase();
+        LP.say(`Picture received: ${caption}. Pinned to the log.`);
+        /* the keepsake: a small JPEG of the developed card, pinned to the
+           POSTCARD line so the picture outlives its six-minute cycle */
+        if (LP.log && LP.log.attachPicture) {
+          try {
+            const th = document.createElement('canvas'); th.width = 128; th.height = 96;
+            th.getContext('2d').drawImage(cv, 0, 0, 128, 96);
+            LP.log.attachPicture(th.toDataURL('image/jpeg', 0.55), caption);
+          } catch { /* a tainted or oversized canvas just skips the keepsake */ }
+        }
       }
       /* the live scan line glows */
       cx.fillStyle = 'rgba(111,221,139,.8)';

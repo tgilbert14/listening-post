@@ -6,6 +6,7 @@
   const glass = document.getElementById('waterfall');
   const bands = [0, 1, 2].map(i => document.getElementById('band-' + i));
   const logBtn = document.getElementById('log-toggle');
+  const zoomBtn = document.getElementById('zoom-toggle');
 
   const anyGesture = () => { LP.audio.arm(); LP.ticker.kick(); };
   addEventListener('pointerdown', anyGesture, { capture: true });
@@ -40,7 +41,8 @@
   }
   LP.reflectDial = reflectDial;
 
-  function tuneTo(f, coarse) {
+  function tuneTo(f, coarse, fromCoast) {
+    if (!fromCoast && typeof stopCoast === 'function') stopCoast(); /* any deliberate tune catches the flywheel */
     const B = LP.band.BANDS[LP.rx.band];
     LP.rx.vfo = LP.clamp(Math.round(f * 10) / 10, B.lo, B.hi);
     LP.rx.dwellT0 = performance.now();
@@ -60,10 +62,11 @@
 
   function setBand(ix) {
     if (ix === LP.rx.band) return;
-    dialDrag = null; glassDrag = null; /* a band jump ends any drag in flight */
+    dialDrag = null; glassDrag = null; stopCoast(); /* a band jump ends any drag or coast in flight */
     lastVfo[LP.rx.band] = LP.rx.vfo;
     LP.rx.band = ix;
     reflectBand();
+    if (LP.relayClunk) LP.relayClunk();   /* the band switch throws a relay */
     tuneTo(lastVfo[ix], true);
     LP.say(`Band ${LP.band.BANDS[ix].name.toLowerCase()}, ${LP.rx.vfo.toFixed(1)} kilohertz.`);
     persist();
@@ -73,22 +76,56 @@
   }
   bands.forEach((b, i) => b.addEventListener('click', () => setBand(i)));
 
-  /* ---------- the dial strip (one pointer owns a drag, start to finish) ---------- */
-  let dialDrag = null;
+  /* ---------- the dial strip (one pointer owns a drag, start to finish) ----------
+     A weighted flywheel: fling the dial and it coasts, shedding speed against
+     friction until it settles — the tuning knob has mass. */
+  let dialDrag = null, coastV = 0, flingV = 0, coastTask = null, lastMoveT = 0, coastVfo = 0;
+  /* stopCoast kills the ACTIVE coast; it must not touch flingV, the velocity a
+     live drag is still accumulating (a deliberate tune stops the coast, but a
+     fling in progress keeps its momentum) */
+  function stopCoast() { if (coastTask) { coastTask(); coastTask = null; } coastV = 0; }
+  function startCoast() {
+    if (LP.rm.matches) { coastV = 0; return; }              /* no surprise motion */
+    if (Math.abs(coastV) < 0.02) { coastV = 0; return; }   /* too slow to bother */
+    if (coastTask) return;
+    coastTask = LP.ticker.add((dt) => {
+      const B = LP.band.BANDS[LP.rx.band];
+      LP.rx.vfo = LP.rx.vfo + coastV * dt;
+      coastV *= Math.exp(-dt / 320);                        /* the flywheel's drag */
+      /* the band edge is a soft wall — the momentum dies against it */
+      if (LP.rx.vfo <= B.lo) { LP.rx.vfo = B.lo; coastV = 0; }
+      if (LP.rx.vfo >= B.hi) { LP.rx.vfo = B.hi; coastV = 0; }
+      tuneTo(LP.rx.vfo, true, true);
+      if (Math.abs(coastV) < 0.008) { coastTask = null; return false; }
+    });
+  }
   dial.addEventListener('pointerdown', (e) => {
     if (LP.dismissCardSoft) LP.dismissCardSoft(); /* hands on the dial: the card bows out */
     if (dialDrag) return;
     e.preventDefault();
-    dial.setPointerCapture(e.pointerId);
+    stopCoast();                                            /* catch the spinning knob */
+    try { dial.setPointerCapture(e.pointerId); } catch { }
     dialDrag = { id: e.pointerId, x: e.clientX, vfo: LP.rx.vfo };
+    lastMoveT = performance.now(); coastVfo = LP.rx.vfo;
     dial.focus();
   });
   dial.addEventListener('pointermove', (e) => {
     if (!dialDrag || e.pointerId !== dialDrag.id) return;
     const dx = e.clientX - dialDrag.x;
-    tuneTo(dialDrag.vfo + dx * 0.12, true);
+    const nv = dialDrag.vfo + dx * 0.12;
+    const now = performance.now(), dt = now - lastMoveT;
+    if (dt > 0) flingV = (nv - coastVfo) / dt;             /* kHz per ms, banked for release */
+    lastMoveT = now; coastVfo = nv;
+    tuneTo(nv, true);
   });
-  const dialUp = (e) => { if (dialDrag && e.pointerId === dialDrag.id) dialDrag = null; };
+  const dialUp = (e) => {
+    if (dialDrag && e.pointerId === dialDrag.id) {
+      dialDrag = null;
+      if (performance.now() - lastMoveT < 90) { coastV = flingV; startCoast(); } /* released mid-motion: let it run */
+      else coastV = 0;
+      flingV = 0;
+    }
+  };
   dial.addEventListener('pointerup', dialUp);
   dial.addEventListener('pointercancel', dialUp);
   dial.addEventListener('lostpointercapture', dialUp);
@@ -164,6 +201,16 @@
   logBtn.addEventListener('click', () => toggleLog());
   LP.toggleLog = toggleLog;
 
+  /* ---------- zoom ---------- */
+  function reflectZoom() {
+    if (!zoomBtn) return;
+    zoomBtn.textContent = `${LP.rx.span} kHz`;
+    zoomBtn.setAttribute('aria-label', `Span: ${LP.rx.span} kilohertz. Zoom the window.`);
+  }
+  LP.reflectZoom = reflectZoom;
+  if (zoomBtn) zoomBtn.addEventListener('click', () => { LP.cycleSpan(); reflectZoom(); });
+  reflectZoom();
+
   /* ---------- the operator's card: docked, never a wall ---------- */
   const cardBtn = document.getElementById('card-toggle');
   const card = document.getElementById('opcard');
@@ -196,6 +243,7 @@
       case '1': setBand(0); break;
       case '2': setBand(1); break;
       case '3': setBand(2); break;
+      case 'z': case 'Z': LP.cycleSpan(); break;
       case 'l': case 'L': toggleLog(); break;
       default: return;
     }

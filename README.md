@@ -9,21 +9,32 @@ so what you see is exactly what you hear. CW beats against the BFO, which means 
 beacon **is** your tuning error. Signals fade on slow ionospheric cycles. Lightning crashes are
 broadband on the glass and in your ears at the same moment.
 
-Three bands, and the traffic runs on the wall clock whether anyone is listening or not:
+The band is **inhabited**. Under the named stations runs an underbrush of dozens of minor
+signals — weak CW ragchews, drifting carriers, splatter — seeded fresh each day, never named,
+never logged. They exist so the named stations are discoveries in a crowd, not exhibits in an
+empty hall. The traffic runs on the wall clock whether anyone is listening or not:
 
 - **Beacons** keying real morse, all night, forever
 - **THE LATTICE** — a buzzer that reads five groups of five in tone-digits; the groups change daily
 - **THE FORECAST** — 45-baud RTTY carrying the weather for places without weather stations
 - **AURORA** — someone, somewhere, is playing records through 2,000 miles of ionosphere
 - **POSTCARD** — an SSTV station: every six minutes, a new procedurally-drawn picture, painted
-  thirty-two lines at a time; tune it badly and the lines come in skewed and snowy
+  thirty-two lines at a time; tune it badly and the lines come in skewed and snowy. Sit with one
+  to the end and the finished card is **pinned into your log** as a keepsake
 - **HOMECOMING** — eleven tones, only transmitted after dark, your local dark
+- **THE CROSSING** — some nights, a bell far away over 6660. About one night in four, seeded by
+  the date. Hearing it at all is the event
 - and if you hold a quiet frequency long enough, something notices. It drifts toward your dial,
   falls to zero-beat, and asks who was there. Once.
 
-Hold a signal and it gets pencilled into the **station log** (the book survives the night).
-Log enough of the band and, once, every station keys the same three characters at the same
-moment — the net acknowledging a new listener.
+**Zoom** the window from 48 kHz down to 12 kHz and the keying resolves in the raster — dits and
+dahs become individually legible. The **dial has mass**: fling it and the weighted flywheel coasts,
+shedding speed against friction. Switching bands throws a **relay** you can hear.
+
+Hold a named signal and it gets pencilled into the **station log** the way an operator keeps one —
+UTC timestamp, band, and a signal report in RST computed from what the set is actually hearing
+(the book survives the night). Log enough of the band and, once, every station keys the same three
+characters at the same moment — the net acknowledging a new listener.
 
 **Live:** https://tgilbert14.github.io/listening-post/
 
@@ -31,8 +42,9 @@ moment — the net acknowledging a new listener.
 
 | Verb | Pointer | Keys |
 |---|---|---|
-| Tune | drag the glass or the dial strip; wheel for fine work | arrows (±0.1 / ±1), PgUp/PgDn (±5), Home/End |
+| Tune | drag the glass or the dial strip; wheel for fine work; fling the dial to coast | arrows (±0.1 / ±1), PgUp/PgDn (±5), Home/End |
 | Jump across the band | tap the ribbon at the top of the glass | — |
+| Zoom the window | 48/24/12 kHz chip | `Z` |
 | Change band | GROUND / SKY / HIGH chips | `1` `2` `3` |
 | Station log | LOG chip | `L` |
 

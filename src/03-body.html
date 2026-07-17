@@ -29,6 +29,7 @@
 
     <div class="side">
       <canvas id="smeter" aria-hidden="true"></canvas>
+      <button class="chip" id="zoom-toggle" disabled aria-label="Span: 48 kilohertz. Zoom the window.">48 kHz</button>
       <button class="chip" id="log-toggle" disabled aria-expanded="false" aria-controls="logbook">Log</button>
       <button class="chip" id="card-toggle" disabled aria-expanded="false" aria-controls="opcard">Card</button>
       <button class="chip" id="sound-toggle" disabled aria-pressed="false">Sound</button>
@@ -40,11 +41,11 @@
       <h2>The Listening Post</h2>
       <p class="what">A shortwave receiver. Everything on it is transmitting <em>right now</em> — nothing is recorded.</p>
       <ul>
-        <li><strong>Tune</strong> — drag the glass or the dial strip. The wheel is fine tuning. Arrow keys work.</li>
-        <li><strong>Bright lines are stations.</strong> Hold one and it gets pencilled into the log (<kbd>L</kbd>).</li>
+        <li><strong>Tune</strong> — drag the glass or the dial. Fling it and the dial coasts. The wheel is fine tuning; arrow keys work too.</li>
+        <li>The band is <em>crowded</em> — most lines are strangers passing through. The steady, <strong>named</strong> ones reward holding: lock one and it's pencilled into the log (<kbd>L</kbd>).</li>
+        <li><strong>Zoom</strong> the window with <kbd>Z</kbd> — narrow the span and the keying resolves into readable dots and dashes.</li>
         <li><strong>Three bands</strong> — <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>. The strip at the top of the glass is the whole band; tap it to jump.</li>
-        <li>Some of the band only wakes after dark. <em>Your</em> dark.</li>
-        <li>And if a quiet frequency is held long enough… hold it and see.</li>
+        <li>Some of the band only wakes after dark. <em>Your</em> dark — and some nights, something crosses that isn't there the next.</li>
       </ul>
       <p class="sig">— the last operator</p>
       <button id="card-close" class="qsl-close">Back to the band</button>

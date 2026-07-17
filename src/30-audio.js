@@ -135,6 +135,14 @@ LP.audio = (() => {
       const sg = ctx.createGain(); sg.gain.value = 0.55;
       v.o.connect(sg).connect(g);
       v.aux.push(sg);
+    } else if (st.type === 'crossing') {
+      /* a grade-crossing bell heard across a long night: two warm tones
+         through a lowpass, swinging back and forth, far away and small */
+      v.o = osc('triangle', 620);
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass'; lp.frequency.value = 1400; lp.Q.value = 0.6;
+      v.o.connect(lp).connect(g);
+      v.aux.push(lp);
     } else if (st.type === 'music') {
       /* AURORA's little orchestra: lead + bass through a warm lowpass + echo.
          The tune rides the WALL CLOCK — retune away and back, and the same
@@ -150,6 +158,28 @@ LP.audio = (() => {
       v.nextNote = ctx.currentTime + (320 - (Date.now() % 320)) / 1000;
       v.scale = [0, 3, 5, 7, 10, 12, 15];
       v.aux.push(v.bus, lp, dl, fb);
+    }
+    return v;
+  }
+
+  /* the underbrush gets cheap voices: a CW ragchew beats against the BFO
+     like a beacon, a carrier is a steady het, splatter is a rough rasp. Only
+     the few minors within earshot ever build one. */
+  function mkMinorVoice(m) {
+    const g = ctx.createGain(); g.gain.value = 0;
+    let pan = null;
+    if (ctx.createStereoPanner) { pan = ctx.createStereoPanner(); g.connect(pan).connect(master); }
+    else g.connect(master);
+    const o = ctx.createOscillator();
+    o.type = m.kind === 'splatter' ? 'sawtooth' : 'sine';
+    o.frequency.value = 500; o.start();
+    const v = { g, pan, o, m, nodes: [o], aux: pan ? [pan] : [] };
+    if (m.kind === 'splatter') {
+      const f = ctx.createBiquadFilter();
+      f.type = 'bandpass'; f.frequency.value = 900; f.Q.value = 0.7;
+      o.connect(f).connect(g); v.aux.push(f);
+    } else {
+      o.connect(g);
     }
     return v;
   }
@@ -251,6 +281,9 @@ LP.audio = (() => {
           v.o.frequency.setTargetAtTime(740, now, 0.02);
           v.g.gain.setTargetAtTime(st.activity(t) * str * sel * 0.2, now, K);
         }
+      } else if (st.type === 'crossing') {
+        v.o.frequency.setTargetAtTime(st.toneHigh(t) ? 660 : 494, now, 0.02);
+        v.g.gain.setTargetAtTime(vol * 0.22, now, 0.03);
       } else if (st.type === 'music') {
         v.g.gain.setTargetAtTime(vol * 0.5, now, 0.05);
         /* schedule the little tune ahead of time; the melody is a pure
@@ -265,6 +298,32 @@ LP.audio = (() => {
           v.nextNote = when + beat;
           v.step++;
         }
+      }
+    }
+
+    /* the underbrush within earshot: quiet CW, hets, and hash under the dial */
+    for (const m of LP.band.minors) {
+      if (m.band !== rx.band) continue;
+      const f = LP.band.minorF(m, t);
+      const off = rx.vfo - f;
+      if (Math.abs(off) > 4) continue;
+      const a = LP.band.minorActive(m, t);
+      if (a <= 0) { if (voices.has(m.id)) voices.get(m.id).g.gain.setTargetAtTime(0, now, K); continue; }
+      near.add(m.id);
+      let v = voices.get(m.id);
+      if (!v) { v = mkMinorVoice(m); voices.set(m.id, v); }
+      const str = LP.band.minorStrength(m, t);
+      const sel = Math.exp(-(off * off) / (2 * 0.42 * 0.42));
+      if (v.pan) v.pan.pan.setTargetAtTime(LP.clamp(-off / 3.5, -0.75, 0.75), now, 0.08);
+      if (m.kind === 'carrier') {
+        v.o.frequency.setTargetAtTime(LP.clamp(120 + Math.abs(off) * 1000, 90, 1800), now, 0.05);
+        v.g.gain.setTargetAtTime(str * sel * 0.11, now, 0.05);
+      } else if (m.kind === 'splatter') {
+        v.o.frequency.setTargetAtTime(140 + Math.abs(off) * 260, now, 0.05);
+        v.g.gain.setTargetAtTime(str * sel * 0.05, now, K);
+      } else { /* cw */
+        v.o.frequency.setTargetAtTime(LP.clamp(300 + Math.abs(off) * 1000, 220, 1700), now, 0.03);
+        v.g.gain.setTargetAtTime(str * sel * 0.16, now, K);
       }
     }
 
@@ -302,6 +361,34 @@ LP.audio = (() => {
     crashGain.gain.setTargetAtTime(t < sf.until ? sf.level * 0.16 : 0, now, 0.02);
   }
 
+  /* the band switch throws a physical relay: a click transient over a low
+     thud. Built on demand, gesture-gated like everything else. */
+  function relayClunk() {
+    if (!audible()) return;
+    const now = ctx.currentTime;
+    /* the click: a very short filtered noise snap */
+    const len = Math.floor(ctx.sampleRate * 0.05);
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = ctx.createBufferSource(); src.buffer = buf;
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2200; bp.Q.value = 1.2;
+    const cg = ctx.createGain(); cg.gain.value = 0.16;
+    src.connect(bp).connect(cg).connect(master);
+    src.start(now); src.stop(now + 0.06);
+    src.onended = () => { try { src.disconnect(); bp.disconnect(); cg.disconnect(); } catch { } };
+    /* the thud: a low body that decays fast */
+    const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(150, now);
+    o.frequency.exponentialRampToValueAtTime(70, now + 0.08);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(0.22, now + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.13);
+    o.connect(g).connect(master);
+    o.start(now); o.stop(now + 0.16);
+    o.onended = () => { try { o.disconnect(); g.disconnect(); } catch { } };
+  }
+
   function note(bus, freq, when, dur, type, amp) {
     const o = ctx.createOscillator();
     o.type = type; o.frequency.value = freq;
@@ -313,5 +400,6 @@ LP.audio = (() => {
     o.start(when); o.stop(when + dur + 0.1);
   }
 
-  return { arm, toggle, update, reflect, get smeter() { return smeter; }, get enabled() { return enabled; } };
+  LP.relayClunk = relayClunk;
+  return { arm, toggle, update, reflect, relayClunk, get smeter() { return smeter; }, get enabled() { return enabled; } };
 })();

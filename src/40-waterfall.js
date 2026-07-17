@@ -10,9 +10,9 @@ LP.display = (() => {
   const meter = document.getElementById('smeter');
   const mx = meter.getContext('2d');
   const freqEl = document.getElementById('freq');
-  const WIN = 48;             /* kHz visible in the waterfall */
   const COLS = 512;
   const ROWS = 300;
+  const WIN = () => LP.rx.span;   /* kHz visible in the waterfall — now zoomable */
 
   /* offscreen raster */
   const wf = document.createElement('canvas');
@@ -43,7 +43,8 @@ LP.display = (() => {
   const level = (x) => Math.min(255, Math.floor(255 * Math.tanh(x * 1.55)));
 
   function pushRow(t) {
-    const fLo = LP.rx.vfo - WIN / 2, fHi = LP.rx.vfo + WIN / 2;
+    const win = WIN();
+    const fLo = LP.rx.vfo - win / 2, fHi = LP.rx.vfo + win / 2;
     LP.band.spectrumRow(rowBuf, fLo, fHi, t, LP.rx.band, rng);
     const d = rowImg.data;
     for (let i = 0; i < COLS; i++) {
@@ -128,18 +129,26 @@ LP.display = (() => {
     cx.moveTo(w / 2 - 5 * px, wfY); cx.lineTo(w / 2 + 5 * px, wfY); cx.lineTo(w / 2, wfY + 7 * px);
     cx.closePath(); cx.fill();
 
-    /* frequency scale */
-    const fLo = LP.rx.vfo - WIN / 2;
+    /* frequency scale: the tick step tightens as you zoom in, so a 12 kHz
+       window is graduated in single kilohertz */
+    const win = WIN();
+    const fLo = LP.rx.vfo - win / 2;
+    const step = win >= 40 ? 5 : (win >= 20 ? 2 : 1);
     cx.font = `${Math.max(9, h * 0.028)}px Consolas, monospace`;
     cx.textAlign = 'center';
-    const first = Math.ceil(fLo / 5) * 5;
-    for (let f = first; f < fLo + WIN; f += 5) {
-      const x = (f - fLo) / WIN * w;
+    const first = Math.ceil(fLo / step) * step;
+    for (let f = first; f < fLo + win; f += step) {
+      const x = (f - fLo) / win * w;
       cx.fillStyle = 'rgba(154,163,156,.25)';
       cx.fillRect(x, wfY + wfH, px, 5 * px);
       cx.fillStyle = 'rgba(154,163,156,.55)';
       cx.fillText(String(f), x, h - 5);
     }
+    /* span badge: tell the operator how wide the window is */
+    cx.textAlign = 'right';
+    cx.fillStyle = 'rgba(217,164,65,.6)';
+    cx.font = `${Math.max(8, h * 0.024)}px Consolas, monospace`;
+    cx.fillText(`SPAN ${win} kHz`, w - 6, wfY + 12 * px);
   }
 
   /* ---------- S-meter ---------- */
@@ -254,7 +263,7 @@ LP.display = (() => {
     /* the ghost stalks quiet frequencies */
     let nearStation = false;
     for (const s of LP.band.stations) {
-      if (s.band === LP.rx.band && Math.abs(s.f - LP.rx.vfo) < 3 && LP.band.strength(s, t) > 0.05 && (s.type !== 'night' || s.isOn())) { nearStation = true; break; }
+      if (s.band === LP.rx.band && Math.abs(s.f - LP.rx.vfo) < 3 && LP.band.strength(s, t) > 0.05 && (!s.isOn || s.isOn())) { nearStation = true; break; }
     }
     LP.band.ghost.tune(LP.rx.vfo, dwell, nearStation, dt);
 
@@ -283,10 +292,31 @@ LP.display = (() => {
 
   function invalidateRow() { lastRow = 0; dirty = true; }
 
+  /* zoom the window. The raster below is wiped so its history never shows two
+     different scales stacked; the new width redraws from the next row down. */
+  function setSpan(span) {
+    if (span === LP.rx.span) return;
+    LP.rx.span = span;
+    wx.fillStyle = '#03100a'; wx.fillRect(0, 0, COLS, ROWS);
+    lastRow = 0; dirty = true;
+    LP.ticker.kick();
+    LP.store.set('span', span);
+    if (LP.reflectZoom) LP.reflectZoom();
+    if (LP.reflectDial) LP.reflectDial();
+    LP.say(`Span ${span} kilohertz${span === 12 ? ' — the keying resolves' : ''}.`);
+  }
+  function cycleSpan() {
+    const i = LP.SPANS.indexOf(LP.rx.span);
+    setSpan(LP.SPANS[(i + 1) % LP.SPANS.length]);
+  }
+  LP.setSpan = setSpan; LP.cycleSpan = cycleSpan;
+
   function boot() {
+    const saved = LP.store.get('span', 48);
+    if (LP.SPANS.includes(saved)) LP.rx.span = saved;
     resize();
     LP.ticker.add(loop);
   }
 
-  return { boot, resize, frame: loop, WIN, invalidateRow };
+  return { boot, resize, frame: loop, get WIN() { return LP.rx.span; }, invalidateRow, setSpan, cycleSpan };
 })();

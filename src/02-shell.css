@@ -239,8 +239,20 @@ button.chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px
   gap: 2px 10px;
 }
 .logbook li .id { color: var(--phos); letter-spacing: .08em; }
-.logbook li .f { color: var(--amber); font-variant-numeric: tabular-nums; }
+.logbook li .f { color: var(--amber); font-variant-numeric: tabular-nums; text-align: right; }
+.logbook li .meta {
+  grid-column: 1 / -1;
+  color: var(--phos-text); font-size: 10px; letter-spacing: .12em;
+  font-variant-numeric: tabular-nums; text-transform: uppercase;
+}
 .logbook li .note { grid-column: 1 / -1; color: var(--pencil-text); font-size: 10.5px; letter-spacing: .04em; }
+.logbook li .pic {
+  grid-column: 1 / -1;
+  width: 128px; max-width: 60%; height: auto; margin-top: 6px;
+  border: 1px solid #3a463d; border-radius: 3px;
+  image-rendering: auto;
+  box-shadow: 0 4px 12px rgba(0,0,0,.5);
+}
 .logbook li.empty { color: var(--pencil-text); font-style: italic; border: 0; }
 .logbook li.net { color: var(--phos-bright); }
 .logbook li.net .id { color: var(--phos-bright); }

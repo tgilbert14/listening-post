@@ -190,6 +190,81 @@ LP.band = (() => {
     },
   });
 
+  /* ---------- THE CROSSING: some nights, a bell far away ---------- */
+  /* A rare visitor (about one night in four, seeded by the date): a faint
+     two-tone crossing bell drifting over 6660. Hearing it at all is the event. */
+  S.push({
+    id: 'THE CROSSING', name: 'THE CROSSING', f: 6660.0, band: 1, type: 'crossing', bw: 0.35,
+    note: 'some nights, a bell far away ★',
+    isOn() {
+      const h = new Date().getHours();
+      const night = h >= 20 || h < 6;
+      return night && LP.mulberry(daySeed() + 777)() < 0.28;
+    },
+    activity(t) {
+      if (!this.isOn()) return 0;
+      const m = t % 46000;
+      if (m > 34000) return 0;                       /* it fades between rings */
+      return (m % 540) < 260 ? 1 : 0.1;              /* the two-tone swing */
+    },
+    toneHigh(t) { return Math.floor((t % 46000) / 540) % 2 === 0; },
+  });
+
+  /* ---------- the underbrush: the band is INHABITED ---------- */
+  /* Dozens of minor signals seeded fresh each day — weak CW ragchews,
+     drifting carriers, splatter. Not loggable, never named: they exist so
+     the named stations are discoveries in a crowd, not exhibits in a hall. */
+  const minors = (() => {
+    const list = [];
+    const rnd = LP.mulberry(daySeed() * 31 + 7);
+    const CALLS = 'KNWV';
+    const L = () => String.fromCharCode(65 + Math.floor(rnd() * 26));
+    const mkCall = () => CALLS[Math.floor(rnd() * 4)] + Math.floor(1 + rnd() * 9) + L() + L() + L();
+    for (let b = 0; b < 3; b++) {
+      const B = BANDS[b];
+      for (let i = 0; i < 24; i++) {
+        let f = B.lo + 6 + rnd() * (B.hi - B.lo - 12);
+        /* keep clear water around the named stations — a discovery must never
+           be drowned by the crowd it is hiding in */
+        if (S.some(st => st.band === b && Math.abs(st.f - f) < 7)) f = B.lo + 4 + rnd() * 3 + i * 1.7;
+        const roll = rnd();
+        const kind = roll < 0.5 ? 'cw' : (roll < 0.82 ? 'carrier' : 'splatter');
+        const m = {
+          id: `m${b}-${i}`, band: b, f, kind,
+          base: 0.10 + rnd() * 0.20,
+          seed: Math.floor(rnd() * 1e9),
+          phase: rnd() * LP.TAU,                 /* its own slow fade, not the day's */
+          drift: (rnd() - 0.5) * 0.9,            /* carriers wander, kHz either way */
+          wpm: 14 + Math.floor(rnd() * 9),
+          _slot: -1, _live: false,
+        };
+        if (kind === 'cw') {
+          const call = mkCall(), other = mkCall();
+          m._m = rnd() < 0.4
+            ? compileMorse(`${other} DE ${call} R R TNX FER RPRT 73`, m.wpm, 6000 + rnd() * 8000)
+            : compileMorse(`CQ CQ DE ${call} ${call} K`, m.wpm, 4000 + rnd() * 9000);
+        }
+        list.push(m);
+      }
+    }
+    return list;
+  })();
+  /* on the air in bursts: a seeded duty schedule, no two alike. The slot roll
+     is cached — this runs for every minor on every raster row. */
+  function minorActive(m, t) {
+    const slot = Math.floor(t / (60000 + (m.seed % 50000)));
+    if (slot !== m._slot) { m._slot = slot; m._live = LP.mulberry(m.seed + slot)() <= 0.55; }
+    if (!m._live) return 0;
+    if (m.kind === 'cw') return morseOn(m._m, t) ? 1 : 0;
+    return 1;
+  }
+  function minorF(m, t) {
+    return m.kind === 'carrier' ? m.f + Math.sin(t / 100000 + m.phase) * m.drift : m.f;
+  }
+  function minorStrength(m, t) {
+    return LP.clamp(m.base * bandFactor(m.band) * (0.7 + 0.3 * Math.sin(t / 7000 + m.phase)), 0, 1);
+  }
+
   /* ---------- propagation ---------- */
   /* real HF behavior, played straight: the low band carries at night, the
      high band by day, the middle hardly cares. The ionosphere is the game. */
@@ -209,7 +284,7 @@ LP.band = (() => {
       + 0.10 * Math.sin(t / 2300 + seed * 1.7);
   }
   function strength(st, t) {
-    if (st.type === 'night' && !st.isOn()) return 0;
+    if (st.isOn && !st.isOn()) return 0;   /* any station may keep its own hours */
     return LP.clamp(fade(st, t) * bandFactor(st.band), 0.08, 1);
   }
 
@@ -271,6 +346,17 @@ LP.band = (() => {
     const crash = t < sferic.until ? sferic.level * (0.4 + 0.6 * rng()) : 0;
     for (let i = 0; i < cols; i++) {
       out[i] = noiseBase * (0.4 + rng() * 1.1) + crash * (0.5 + rng() * 0.5);
+    }
+    /* the underbrush first, so a named station always paints over its crowd */
+    for (const m of minors) {
+      if (m.band !== bandIx) continue;
+      const f = minorF(m, t);
+      if (f < fLo - 1 || f > fHi + 1) continue;   /* skip the morse scan entirely */
+      const a = minorActive(m, t) * minorStrength(m, t);
+      if (a <= 0.004) continue;
+      const center = (f - fLo) / (fHi - fLo) * cols - 0.5;
+      if (m.kind === 'splatter') splat(out, center, Math.max(1.4, 2.2 / (fHi - fLo) * cols), a * 0.6);
+      else splat(out, center, Math.max(0.7, 0.09 / (fHi - fLo) * cols / 2), a);
     }
     for (const st of S) {
       if (st.band !== bandIx) continue;
@@ -344,10 +430,16 @@ LP.band = (() => {
     return edges.filter(e => e.t >= t0 && e.t <= t1);
   }
 
-  return { BANDS, stations: S, strength, spectrumRow, ghost, latticeGroups, compileMorse, morseOn, decodeMorse, sferic, net, keyEdges };
+  return {
+    BANDS, stations: S, strength, spectrumRow, ghost, latticeGroups,
+    compileMorse, morseOn, decodeMorse, sferic, net, keyEdges,
+    minors, minorActive, minorF, minorStrength,
+  };
 })();
 
-/* the receiver state: one VFO, one band. Arrival parks it a nudge below
-   AURORA so the first drag of the dial tunes INTO the music. */
-LP.rx = { band: 1, vfo: 6779.0, dwellT0: performance.now() };
+/* the receiver state: one VFO, one band, one span (the width of the window
+   the waterfall resolves). Arrival parks it a nudge below AURORA so the first
+   drag of the dial tunes INTO the music. */
+LP.rx = { band: 1, vfo: 6779.0, span: 48, dwellT0: performance.now() };
+LP.SPANS = [48, 24, 12];   /* wide to narrow: zoom in and the keying resolves */
 

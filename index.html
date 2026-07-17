@@ -283,8 +283,20 @@ button.chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px
   gap: 2px 10px;
 }
 .logbook li .id { color: var(--phos); letter-spacing: .08em; }
-.logbook li .f { color: var(--amber); font-variant-numeric: tabular-nums; }
+.logbook li .f { color: var(--amber); font-variant-numeric: tabular-nums; text-align: right; }
+.logbook li .meta {
+  grid-column: 1 / -1;
+  color: var(--phos-text); font-size: 10px; letter-spacing: .12em;
+  font-variant-numeric: tabular-nums; text-transform: uppercase;
+}
 .logbook li .note { grid-column: 1 / -1; color: var(--pencil-text); font-size: 10.5px; letter-spacing: .04em; }
+.logbook li .pic {
+  grid-column: 1 / -1;
+  width: 128px; max-width: 60%; height: auto; margin-top: 6px;
+  border: 1px solid #3a463d; border-radius: 3px;
+  image-rendering: auto;
+  box-shadow: 0 4px 12px rgba(0,0,0,.5);
+}
 .logbook li.empty { color: var(--pencil-text); font-style: italic; border: 0; }
 .logbook li.net { color: var(--phos-bright); }
 .logbook li.net .id { color: var(--phos-bright); }
@@ -443,6 +455,7 @@ body.arriving .masthead, body.arriving .panel { opacity: 0; }
 
     <div class="side">
       <canvas id="smeter" aria-hidden="true"></canvas>
+      <button class="chip" id="zoom-toggle" disabled aria-label="Span: 48 kilohertz. Zoom the window.">48 kHz</button>
       <button class="chip" id="log-toggle" disabled aria-expanded="false" aria-controls="logbook">Log</button>
       <button class="chip" id="card-toggle" disabled aria-expanded="false" aria-controls="opcard">Card</button>
       <button class="chip" id="sound-toggle" disabled aria-pressed="false">Sound</button>
@@ -454,11 +467,11 @@ body.arriving .masthead, body.arriving .panel { opacity: 0; }
       <h2>The Listening Post</h2>
       <p class="what">A shortwave receiver. Everything on it is transmitting <em>right now</em> — nothing is recorded.</p>
       <ul>
-        <li><strong>Tune</strong> — drag the glass or the dial strip. The wheel is fine tuning. Arrow keys work.</li>
-        <li><strong>Bright lines are stations.</strong> Hold one and it gets pencilled into the log (<kbd>L</kbd>).</li>
+        <li><strong>Tune</strong> — drag the glass or the dial. Fling it and the dial coasts. The wheel is fine tuning; arrow keys work too.</li>
+        <li>The band is <em>crowded</em> — most lines are strangers passing through. The steady, <strong>named</strong> ones reward holding: lock one and it's pencilled into the log (<kbd>L</kbd>).</li>
+        <li><strong>Zoom</strong> the window with <kbd>Z</kbd> — narrow the span and the keying resolves into readable dots and dashes.</li>
         <li><strong>Three bands</strong> — <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>. The strip at the top of the glass is the whole band; tap it to jump.</li>
-        <li>Some of the band only wakes after dark. <em>Your</em> dark.</li>
-        <li>And if a quiet frequency is held long enough… hold it and see.</li>
+        <li>Some of the band only wakes after dark. <em>Your</em> dark — and some nights, something crosses that isn't there the next.</li>
       </ul>
       <p class="sig">— the last operator</p>
       <button id="card-close" class="qsl-close">Back to the band</button>
@@ -747,6 +760,81 @@ LP.band = (() => {
     },
   });
 
+  /* ---------- THE CROSSING: some nights, a bell far away ---------- */
+  /* A rare visitor (about one night in four, seeded by the date): a faint
+     two-tone crossing bell drifting over 6660. Hearing it at all is the event. */
+  S.push({
+    id: 'THE CROSSING', name: 'THE CROSSING', f: 6660.0, band: 1, type: 'crossing', bw: 0.35,
+    note: 'some nights, a bell far away ★',
+    isOn() {
+      const h = new Date().getHours();
+      const night = h >= 20 || h < 6;
+      return night && LP.mulberry(daySeed() + 777)() < 0.28;
+    },
+    activity(t) {
+      if (!this.isOn()) return 0;
+      const m = t % 46000;
+      if (m > 34000) return 0;                       /* it fades between rings */
+      return (m % 540) < 260 ? 1 : 0.1;              /* the two-tone swing */
+    },
+    toneHigh(t) { return Math.floor((t % 46000) / 540) % 2 === 0; },
+  });
+
+  /* ---------- the underbrush: the band is INHABITED ---------- */
+  /* Dozens of minor signals seeded fresh each day — weak CW ragchews,
+     drifting carriers, splatter. Not loggable, never named: they exist so
+     the named stations are discoveries in a crowd, not exhibits in a hall. */
+  const minors = (() => {
+    const list = [];
+    const rnd = LP.mulberry(daySeed() * 31 + 7);
+    const CALLS = 'KNWV';
+    const L = () => String.fromCharCode(65 + Math.floor(rnd() * 26));
+    const mkCall = () => CALLS[Math.floor(rnd() * 4)] + Math.floor(1 + rnd() * 9) + L() + L() + L();
+    for (let b = 0; b < 3; b++) {
+      const B = BANDS[b];
+      for (let i = 0; i < 24; i++) {
+        let f = B.lo + 6 + rnd() * (B.hi - B.lo - 12);
+        /* keep clear water around the named stations — a discovery must never
+           be drowned by the crowd it is hiding in */
+        if (S.some(st => st.band === b && Math.abs(st.f - f) < 7)) f = B.lo + 4 + rnd() * 3 + i * 1.7;
+        const roll = rnd();
+        const kind = roll < 0.5 ? 'cw' : (roll < 0.82 ? 'carrier' : 'splatter');
+        const m = {
+          id: `m${b}-${i}`, band: b, f, kind,
+          base: 0.10 + rnd() * 0.20,
+          seed: Math.floor(rnd() * 1e9),
+          phase: rnd() * LP.TAU,                 /* its own slow fade, not the day's */
+          drift: (rnd() - 0.5) * 0.9,            /* carriers wander, kHz either way */
+          wpm: 14 + Math.floor(rnd() * 9),
+          _slot: -1, _live: false,
+        };
+        if (kind === 'cw') {
+          const call = mkCall(), other = mkCall();
+          m._m = rnd() < 0.4
+            ? compileMorse(`${other} DE ${call} R R TNX FER RPRT 73`, m.wpm, 6000 + rnd() * 8000)
+            : compileMorse(`CQ CQ DE ${call} ${call} K`, m.wpm, 4000 + rnd() * 9000);
+        }
+        list.push(m);
+      }
+    }
+    return list;
+  })();
+  /* on the air in bursts: a seeded duty schedule, no two alike. The slot roll
+     is cached — this runs for every minor on every raster row. */
+  function minorActive(m, t) {
+    const slot = Math.floor(t / (60000 + (m.seed % 50000)));
+    if (slot !== m._slot) { m._slot = slot; m._live = LP.mulberry(m.seed + slot)() <= 0.55; }
+    if (!m._live) return 0;
+    if (m.kind === 'cw') return morseOn(m._m, t) ? 1 : 0;
+    return 1;
+  }
+  function minorF(m, t) {
+    return m.kind === 'carrier' ? m.f + Math.sin(t / 100000 + m.phase) * m.drift : m.f;
+  }
+  function minorStrength(m, t) {
+    return LP.clamp(m.base * bandFactor(m.band) * (0.7 + 0.3 * Math.sin(t / 7000 + m.phase)), 0, 1);
+  }
+
   /* ---------- propagation ---------- */
   /* real HF behavior, played straight: the low band carries at night, the
      high band by day, the middle hardly cares. The ionosphere is the game. */
@@ -766,7 +854,7 @@ LP.band = (() => {
       + 0.10 * Math.sin(t / 2300 + seed * 1.7);
   }
   function strength(st, t) {
-    if (st.type === 'night' && !st.isOn()) return 0;
+    if (st.isOn && !st.isOn()) return 0;   /* any station may keep its own hours */
     return LP.clamp(fade(st, t) * bandFactor(st.band), 0.08, 1);
   }
 
@@ -828,6 +916,17 @@ LP.band = (() => {
     const crash = t < sferic.until ? sferic.level * (0.4 + 0.6 * rng()) : 0;
     for (let i = 0; i < cols; i++) {
       out[i] = noiseBase * (0.4 + rng() * 1.1) + crash * (0.5 + rng() * 0.5);
+    }
+    /* the underbrush first, so a named station always paints over its crowd */
+    for (const m of minors) {
+      if (m.band !== bandIx) continue;
+      const f = minorF(m, t);
+      if (f < fLo - 1 || f > fHi + 1) continue;   /* skip the morse scan entirely */
+      const a = minorActive(m, t) * minorStrength(m, t);
+      if (a <= 0.004) continue;
+      const center = (f - fLo) / (fHi - fLo) * cols - 0.5;
+      if (m.kind === 'splatter') splat(out, center, Math.max(1.4, 2.2 / (fHi - fLo) * cols), a * 0.6);
+      else splat(out, center, Math.max(0.7, 0.09 / (fHi - fLo) * cols / 2), a);
     }
     for (const st of S) {
       if (st.band !== bandIx) continue;
@@ -901,12 +1000,18 @@ LP.band = (() => {
     return edges.filter(e => e.t >= t0 && e.t <= t1);
   }
 
-  return { BANDS, stations: S, strength, spectrumRow, ghost, latticeGroups, compileMorse, morseOn, decodeMorse, sferic, net, keyEdges };
+  return {
+    BANDS, stations: S, strength, spectrumRow, ghost, latticeGroups,
+    compileMorse, morseOn, decodeMorse, sferic, net, keyEdges,
+    minors, minorActive, minorF, minorStrength,
+  };
 })();
 
-/* the receiver state: one VFO, one band. Arrival parks it a nudge below
-   AURORA so the first drag of the dial tunes INTO the music. */
-LP.rx = { band: 1, vfo: 6779.0, dwellT0: performance.now() };
+/* the receiver state: one VFO, one band, one span (the width of the window
+   the waterfall resolves). Arrival parks it a nudge below AURORA so the first
+   drag of the dial tunes INTO the music. */
+LP.rx = { band: 1, vfo: 6779.0, span: 48, dwellT0: performance.now() };
+LP.SPANS = [48, 24, 12];   /* wide to narrow: zoom in and the keying resolves */
 
 
 
@@ -1047,6 +1152,14 @@ LP.audio = (() => {
       const sg = ctx.createGain(); sg.gain.value = 0.55;
       v.o.connect(sg).connect(g);
       v.aux.push(sg);
+    } else if (st.type === 'crossing') {
+      /* a grade-crossing bell heard across a long night: two warm tones
+         through a lowpass, swinging back and forth, far away and small */
+      v.o = osc('triangle', 620);
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass'; lp.frequency.value = 1400; lp.Q.value = 0.6;
+      v.o.connect(lp).connect(g);
+      v.aux.push(lp);
     } else if (st.type === 'music') {
       /* AURORA's little orchestra: lead + bass through a warm lowpass + echo.
          The tune rides the WALL CLOCK — retune away and back, and the same
@@ -1062,6 +1175,28 @@ LP.audio = (() => {
       v.nextNote = ctx.currentTime + (320 - (Date.now() % 320)) / 1000;
       v.scale = [0, 3, 5, 7, 10, 12, 15];
       v.aux.push(v.bus, lp, dl, fb);
+    }
+    return v;
+  }
+
+  /* the underbrush gets cheap voices: a CW ragchew beats against the BFO
+     like a beacon, a carrier is a steady het, splatter is a rough rasp. Only
+     the few minors within earshot ever build one. */
+  function mkMinorVoice(m) {
+    const g = ctx.createGain(); g.gain.value = 0;
+    let pan = null;
+    if (ctx.createStereoPanner) { pan = ctx.createStereoPanner(); g.connect(pan).connect(master); }
+    else g.connect(master);
+    const o = ctx.createOscillator();
+    o.type = m.kind === 'splatter' ? 'sawtooth' : 'sine';
+    o.frequency.value = 500; o.start();
+    const v = { g, pan, o, m, nodes: [o], aux: pan ? [pan] : [] };
+    if (m.kind === 'splatter') {
+      const f = ctx.createBiquadFilter();
+      f.type = 'bandpass'; f.frequency.value = 900; f.Q.value = 0.7;
+      o.connect(f).connect(g); v.aux.push(f);
+    } else {
+      o.connect(g);
     }
     return v;
   }
@@ -1163,6 +1298,9 @@ LP.audio = (() => {
           v.o.frequency.setTargetAtTime(740, now, 0.02);
           v.g.gain.setTargetAtTime(st.activity(t) * str * sel * 0.2, now, K);
         }
+      } else if (st.type === 'crossing') {
+        v.o.frequency.setTargetAtTime(st.toneHigh(t) ? 660 : 494, now, 0.02);
+        v.g.gain.setTargetAtTime(vol * 0.22, now, 0.03);
       } else if (st.type === 'music') {
         v.g.gain.setTargetAtTime(vol * 0.5, now, 0.05);
         /* schedule the little tune ahead of time; the melody is a pure
@@ -1177,6 +1315,32 @@ LP.audio = (() => {
           v.nextNote = when + beat;
           v.step++;
         }
+      }
+    }
+
+    /* the underbrush within earshot: quiet CW, hets, and hash under the dial */
+    for (const m of LP.band.minors) {
+      if (m.band !== rx.band) continue;
+      const f = LP.band.minorF(m, t);
+      const off = rx.vfo - f;
+      if (Math.abs(off) > 4) continue;
+      const a = LP.band.minorActive(m, t);
+      if (a <= 0) { if (voices.has(m.id)) voices.get(m.id).g.gain.setTargetAtTime(0, now, K); continue; }
+      near.add(m.id);
+      let v = voices.get(m.id);
+      if (!v) { v = mkMinorVoice(m); voices.set(m.id, v); }
+      const str = LP.band.minorStrength(m, t);
+      const sel = Math.exp(-(off * off) / (2 * 0.42 * 0.42));
+      if (v.pan) v.pan.pan.setTargetAtTime(LP.clamp(-off / 3.5, -0.75, 0.75), now, 0.08);
+      if (m.kind === 'carrier') {
+        v.o.frequency.setTargetAtTime(LP.clamp(120 + Math.abs(off) * 1000, 90, 1800), now, 0.05);
+        v.g.gain.setTargetAtTime(str * sel * 0.11, now, 0.05);
+      } else if (m.kind === 'splatter') {
+        v.o.frequency.setTargetAtTime(140 + Math.abs(off) * 260, now, 0.05);
+        v.g.gain.setTargetAtTime(str * sel * 0.05, now, K);
+      } else { /* cw */
+        v.o.frequency.setTargetAtTime(LP.clamp(300 + Math.abs(off) * 1000, 220, 1700), now, 0.03);
+        v.g.gain.setTargetAtTime(str * sel * 0.16, now, K);
       }
     }
 
@@ -1214,6 +1378,34 @@ LP.audio = (() => {
     crashGain.gain.setTargetAtTime(t < sf.until ? sf.level * 0.16 : 0, now, 0.02);
   }
 
+  /* the band switch throws a physical relay: a click transient over a low
+     thud. Built on demand, gesture-gated like everything else. */
+  function relayClunk() {
+    if (!audible()) return;
+    const now = ctx.currentTime;
+    /* the click: a very short filtered noise snap */
+    const len = Math.floor(ctx.sampleRate * 0.05);
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = ctx.createBufferSource(); src.buffer = buf;
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2200; bp.Q.value = 1.2;
+    const cg = ctx.createGain(); cg.gain.value = 0.16;
+    src.connect(bp).connect(cg).connect(master);
+    src.start(now); src.stop(now + 0.06);
+    src.onended = () => { try { src.disconnect(); bp.disconnect(); cg.disconnect(); } catch { } };
+    /* the thud: a low body that decays fast */
+    const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(150, now);
+    o.frequency.exponentialRampToValueAtTime(70, now + 0.08);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(0.22, now + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.13);
+    o.connect(g).connect(master);
+    o.start(now); o.stop(now + 0.16);
+    o.onended = () => { try { o.disconnect(); g.disconnect(); } catch { } };
+  }
+
   function note(bus, freq, when, dur, type, amp) {
     const o = ctx.createOscillator();
     o.type = type; o.frequency.value = freq;
@@ -1225,7 +1417,8 @@ LP.audio = (() => {
     o.start(when); o.stop(when + dur + 0.1);
   }
 
-  return { arm, toggle, update, reflect, get smeter() { return smeter; }, get enabled() { return enabled; } };
+  LP.relayClunk = relayClunk;
+  return { arm, toggle, update, reflect, relayClunk, get smeter() { return smeter; }, get enabled() { return enabled; } };
 })();
 
 
@@ -1241,9 +1434,9 @@ LP.display = (() => {
   const meter = document.getElementById('smeter');
   const mx = meter.getContext('2d');
   const freqEl = document.getElementById('freq');
-  const WIN = 48;             /* kHz visible in the waterfall */
   const COLS = 512;
   const ROWS = 300;
+  const WIN = () => LP.rx.span;   /* kHz visible in the waterfall — now zoomable */
 
   /* offscreen raster */
   const wf = document.createElement('canvas');
@@ -1274,7 +1467,8 @@ LP.display = (() => {
   const level = (x) => Math.min(255, Math.floor(255 * Math.tanh(x * 1.55)));
 
   function pushRow(t) {
-    const fLo = LP.rx.vfo - WIN / 2, fHi = LP.rx.vfo + WIN / 2;
+    const win = WIN();
+    const fLo = LP.rx.vfo - win / 2, fHi = LP.rx.vfo + win / 2;
     LP.band.spectrumRow(rowBuf, fLo, fHi, t, LP.rx.band, rng);
     const d = rowImg.data;
     for (let i = 0; i < COLS; i++) {
@@ -1359,18 +1553,26 @@ LP.display = (() => {
     cx.moveTo(w / 2 - 5 * px, wfY); cx.lineTo(w / 2 + 5 * px, wfY); cx.lineTo(w / 2, wfY + 7 * px);
     cx.closePath(); cx.fill();
 
-    /* frequency scale */
-    const fLo = LP.rx.vfo - WIN / 2;
+    /* frequency scale: the tick step tightens as you zoom in, so a 12 kHz
+       window is graduated in single kilohertz */
+    const win = WIN();
+    const fLo = LP.rx.vfo - win / 2;
+    const step = win >= 40 ? 5 : (win >= 20 ? 2 : 1);
     cx.font = `${Math.max(9, h * 0.028)}px Consolas, monospace`;
     cx.textAlign = 'center';
-    const first = Math.ceil(fLo / 5) * 5;
-    for (let f = first; f < fLo + WIN; f += 5) {
-      const x = (f - fLo) / WIN * w;
+    const first = Math.ceil(fLo / step) * step;
+    for (let f = first; f < fLo + win; f += step) {
+      const x = (f - fLo) / win * w;
       cx.fillStyle = 'rgba(154,163,156,.25)';
       cx.fillRect(x, wfY + wfH, px, 5 * px);
       cx.fillStyle = 'rgba(154,163,156,.55)';
       cx.fillText(String(f), x, h - 5);
     }
+    /* span badge: tell the operator how wide the window is */
+    cx.textAlign = 'right';
+    cx.fillStyle = 'rgba(217,164,65,.6)';
+    cx.font = `${Math.max(8, h * 0.024)}px Consolas, monospace`;
+    cx.fillText(`SPAN ${win} kHz`, w - 6, wfY + 12 * px);
   }
 
   /* ---------- S-meter ---------- */
@@ -1485,7 +1687,7 @@ LP.display = (() => {
     /* the ghost stalks quiet frequencies */
     let nearStation = false;
     for (const s of LP.band.stations) {
-      if (s.band === LP.rx.band && Math.abs(s.f - LP.rx.vfo) < 3 && LP.band.strength(s, t) > 0.05 && (s.type !== 'night' || s.isOn())) { nearStation = true; break; }
+      if (s.band === LP.rx.band && Math.abs(s.f - LP.rx.vfo) < 3 && LP.band.strength(s, t) > 0.05 && (!s.isOn || s.isOn())) { nearStation = true; break; }
     }
     LP.band.ghost.tune(LP.rx.vfo, dwell, nearStation, dt);
 
@@ -1514,12 +1716,33 @@ LP.display = (() => {
 
   function invalidateRow() { lastRow = 0; dirty = true; }
 
+  /* zoom the window. The raster below is wiped so its history never shows two
+     different scales stacked; the new width redraws from the next row down. */
+  function setSpan(span) {
+    if (span === LP.rx.span) return;
+    LP.rx.span = span;
+    wx.fillStyle = '#03100a'; wx.fillRect(0, 0, COLS, ROWS);
+    lastRow = 0; dirty = true;
+    LP.ticker.kick();
+    LP.store.set('span', span);
+    if (LP.reflectZoom) LP.reflectZoom();
+    if (LP.reflectDial) LP.reflectDial();
+    LP.say(`Span ${span} kilohertz${span === 12 ? ' — the keying resolves' : ''}.`);
+  }
+  function cycleSpan() {
+    const i = LP.SPANS.indexOf(LP.rx.span);
+    setSpan(LP.SPANS[(i + 1) % LP.SPANS.length]);
+  }
+  LP.setSpan = setSpan; LP.cycleSpan = cycleSpan;
+
   function boot() {
+    const saved = LP.store.get('span', 48);
+    if (LP.SPANS.includes(saved)) LP.rx.span = saved;
     resize();
     LP.ticker.add(loop);
   }
 
-  return { boot, resize, frame: loop, WIN, invalidateRow };
+  return { boot, resize, frame: loop, get WIN() { return LP.rx.span; }, invalidateRow, setSpan, cycleSpan };
 })();
 
 
@@ -1699,7 +1922,17 @@ LP.sstv = (() => {
       }
       if (painted >= H - 1 && announced !== 'done') {
         announced = 'done';
-        LP.say(`Picture received: ${CAPTIONS[genIx % 3].toLowerCase()}.`);
+        const caption = CAPTIONS[genIx % 3].toLowerCase();
+        LP.say(`Picture received: ${caption}. Pinned to the log.`);
+        /* the keepsake: a small JPEG of the developed card, pinned to the
+           POSTCARD line so the picture outlives its six-minute cycle */
+        if (LP.log && LP.log.attachPicture) {
+          try {
+            const th = document.createElement('canvas'); th.width = 128; th.height = 96;
+            th.getContext('2d').drawImage(cv, 0, 0, 128, 96);
+            LP.log.attachPicture(th.toDataURL('image/jpeg', 0.55), caption);
+          } catch { /* a tainted or oversized canvas just skips the keepsake */ }
+        }
       }
       /* the live scan line glows */
       cx.fillStyle = 'rgba(111,221,139,.8)';
@@ -1731,6 +1964,7 @@ LP.sstv = (() => {
   const glass = document.getElementById('waterfall');
   const bands = [0, 1, 2].map(i => document.getElementById('band-' + i));
   const logBtn = document.getElementById('log-toggle');
+  const zoomBtn = document.getElementById('zoom-toggle');
 
   const anyGesture = () => { LP.audio.arm(); LP.ticker.kick(); };
   addEventListener('pointerdown', anyGesture, { capture: true });
@@ -1765,7 +1999,8 @@ LP.sstv = (() => {
   }
   LP.reflectDial = reflectDial;
 
-  function tuneTo(f, coarse) {
+  function tuneTo(f, coarse, fromCoast) {
+    if (!fromCoast && typeof stopCoast === 'function') stopCoast(); /* any deliberate tune catches the flywheel */
     const B = LP.band.BANDS[LP.rx.band];
     LP.rx.vfo = LP.clamp(Math.round(f * 10) / 10, B.lo, B.hi);
     LP.rx.dwellT0 = performance.now();
@@ -1785,10 +2020,11 @@ LP.sstv = (() => {
 
   function setBand(ix) {
     if (ix === LP.rx.band) return;
-    dialDrag = null; glassDrag = null; /* a band jump ends any drag in flight */
+    dialDrag = null; glassDrag = null; stopCoast(); /* a band jump ends any drag or coast in flight */
     lastVfo[LP.rx.band] = LP.rx.vfo;
     LP.rx.band = ix;
     reflectBand();
+    if (LP.relayClunk) LP.relayClunk();   /* the band switch throws a relay */
     tuneTo(lastVfo[ix], true);
     LP.say(`Band ${LP.band.BANDS[ix].name.toLowerCase()}, ${LP.rx.vfo.toFixed(1)} kilohertz.`);
     persist();
@@ -1798,22 +2034,56 @@ LP.sstv = (() => {
   }
   bands.forEach((b, i) => b.addEventListener('click', () => setBand(i)));
 
-  /* ---------- the dial strip (one pointer owns a drag, start to finish) ---------- */
-  let dialDrag = null;
+  /* ---------- the dial strip (one pointer owns a drag, start to finish) ----------
+     A weighted flywheel: fling the dial and it coasts, shedding speed against
+     friction until it settles — the tuning knob has mass. */
+  let dialDrag = null, coastV = 0, flingV = 0, coastTask = null, lastMoveT = 0, coastVfo = 0;
+  /* stopCoast kills the ACTIVE coast; it must not touch flingV, the velocity a
+     live drag is still accumulating (a deliberate tune stops the coast, but a
+     fling in progress keeps its momentum) */
+  function stopCoast() { if (coastTask) { coastTask(); coastTask = null; } coastV = 0; }
+  function startCoast() {
+    if (LP.rm.matches) { coastV = 0; return; }              /* no surprise motion */
+    if (Math.abs(coastV) < 0.02) { coastV = 0; return; }   /* too slow to bother */
+    if (coastTask) return;
+    coastTask = LP.ticker.add((dt) => {
+      const B = LP.band.BANDS[LP.rx.band];
+      LP.rx.vfo = LP.rx.vfo + coastV * dt;
+      coastV *= Math.exp(-dt / 320);                        /* the flywheel's drag */
+      /* the band edge is a soft wall — the momentum dies against it */
+      if (LP.rx.vfo <= B.lo) { LP.rx.vfo = B.lo; coastV = 0; }
+      if (LP.rx.vfo >= B.hi) { LP.rx.vfo = B.hi; coastV = 0; }
+      tuneTo(LP.rx.vfo, true, true);
+      if (Math.abs(coastV) < 0.008) { coastTask = null; return false; }
+    });
+  }
   dial.addEventListener('pointerdown', (e) => {
     if (LP.dismissCardSoft) LP.dismissCardSoft(); /* hands on the dial: the card bows out */
     if (dialDrag) return;
     e.preventDefault();
-    dial.setPointerCapture(e.pointerId);
+    stopCoast();                                            /* catch the spinning knob */
+    try { dial.setPointerCapture(e.pointerId); } catch { }
     dialDrag = { id: e.pointerId, x: e.clientX, vfo: LP.rx.vfo };
+    lastMoveT = performance.now(); coastVfo = LP.rx.vfo;
     dial.focus();
   });
   dial.addEventListener('pointermove', (e) => {
     if (!dialDrag || e.pointerId !== dialDrag.id) return;
     const dx = e.clientX - dialDrag.x;
-    tuneTo(dialDrag.vfo + dx * 0.12, true);
+    const nv = dialDrag.vfo + dx * 0.12;
+    const now = performance.now(), dt = now - lastMoveT;
+    if (dt > 0) flingV = (nv - coastVfo) / dt;             /* kHz per ms, banked for release */
+    lastMoveT = now; coastVfo = nv;
+    tuneTo(nv, true);
   });
-  const dialUp = (e) => { if (dialDrag && e.pointerId === dialDrag.id) dialDrag = null; };
+  const dialUp = (e) => {
+    if (dialDrag && e.pointerId === dialDrag.id) {
+      dialDrag = null;
+      if (performance.now() - lastMoveT < 90) { coastV = flingV; startCoast(); } /* released mid-motion: let it run */
+      else coastV = 0;
+      flingV = 0;
+    }
+  };
   dial.addEventListener('pointerup', dialUp);
   dial.addEventListener('pointercancel', dialUp);
   dial.addEventListener('lostpointercapture', dialUp);
@@ -1889,6 +2159,16 @@ LP.sstv = (() => {
   logBtn.addEventListener('click', () => toggleLog());
   LP.toggleLog = toggleLog;
 
+  /* ---------- zoom ---------- */
+  function reflectZoom() {
+    if (!zoomBtn) return;
+    zoomBtn.textContent = `${LP.rx.span} kHz`;
+    zoomBtn.setAttribute('aria-label', `Span: ${LP.rx.span} kilohertz. Zoom the window.`);
+  }
+  LP.reflectZoom = reflectZoom;
+  if (zoomBtn) zoomBtn.addEventListener('click', () => { LP.cycleSpan(); reflectZoom(); });
+  reflectZoom();
+
   /* ---------- the operator's card: docked, never a wall ---------- */
   const cardBtn = document.getElementById('card-toggle');
   const card = document.getElementById('opcard');
@@ -1921,6 +2201,7 @@ LP.sstv = (() => {
       case '1': setBand(0); break;
       case '2': setBand(1); break;
       case '3': setBand(2); break;
+      case 'z': case 'Z': LP.cycleSpan(); break;
       case 'l': case 'L': toggleLog(); break;
       default: return;
     }
@@ -1929,36 +2210,77 @@ LP.sstv = (() => {
 })();
 
 
-/* THE LISTENING POST — the station log. Hold a signal and it gets pencilled
-   in; the book survives the night. Log enough of the band and, once, every
-   station keys the same three characters at the same moment — the net
-   acknowledging a new listener. */
+/* THE LISTENING POST — the station log, kept the way an operator keeps one:
+   UTC time, frequency, band, and a signal report in RST. Hold a signal and it
+   gets pencilled in; a finished postcard is pinned to its line. The book
+   survives the night. Log enough of the band and, once, every station keys
+   the same three characters at the same moment — the net, acknowledging a new
+   listener. */
 LP.log = (() => {
   /* one poisoned localStorage entry must never kill the receiver */
   const raw = LP.store.get('log', []);
   const entries = (Array.isArray(raw) ? raw : [])
     .filter(e => e && typeof e.id === 'string')
     .map(e => ({
-      id: e.id, f: Number.isFinite(Number(e.f)) ? Number(e.f) : 0,
+      id: e.id,
+      f: Number.isFinite(Number(e.f)) ? Number(e.f) : 0,
+      band: typeof e.band === 'string' ? e.band : '',
       note: typeof e.note === 'string' ? e.note : '',
-      at: typeof e.at === 'string' ? e.at : '', cls: typeof e.cls === 'string' ? e.cls : '',
+      at: typeof e.at === 'string' ? e.at : '',
+      utc: typeof e.utc === 'string' ? e.utc : '',
+      rst: typeof e.rst === 'string' ? e.rst : '',
+      cls: typeof e.cls === 'string' ? e.cls : '',
+      pic: typeof e.pic === 'string' ? e.pic : '',
     }));
   const list = document.getElementById('log-list');
   const seen = new Set(entries.map(e => e.id));
   let netDone = LP.store.get('net', false);
   let lockedOn = null, lockT0 = 0, lastActive = 0;
+  let pendingPic = null;   /* a postcard that finished before its line existed */
 
   function has(id) { return seen.has(id); }
+  const bandName = () => LP.band.BANDS[LP.rx.band].name;
+  const pad2 = (n) => String(n).padStart(2, '0');
 
-  function add(id, f, note, cls) {
+  /* the signal report, in the operator's shorthand: R(1-5) S(1-9), and for a
+     pure CW tone a T(9). Computed from what the set is actually hearing. */
+  function reportFor(id, t) {
+    const st = LP.band.stations.find(s => s.id === id);
+    if (!st) return '';
+    const off = Math.abs(LP.rx.vfo - st.f);
+    const sel = Math.exp(-(off * off) / (2 * Math.pow(Math.max(st.bw, 0.35) * 0.9, 2)));
+    const s = LP.clamp(Math.round(1 + LP.band.strength(st, t) * sel * 8), 1, 9);
+    const r = LP.clamp(Math.round(2 + sel * 3), 1, 5);
+    const cw = st.type === 'beacon' || st.type === 'crossing';
+    return cw ? `${r}${s}9` : `${r}${s}`;
+  }
+
+  function store() { LP.store.set('log', entries); }
+
+  function add(id, f, note, cls, report) {
     if (seen.has(id)) return;
     seen.add(id);
     const d = new Date();
-    entries.push({ id, f, note, at: `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`, cls: cls || '' });
-    LP.store.set('log', entries);
-    LP.say(`Logged: ${id}, ${f ? f.toFixed(1) + ' kilohertz' : 'frequency unknown'}.`);
+    const e = {
+      id, f, band: bandName(), note: note || '',
+      at: `${pad2(d.getHours())}:${pad2(d.getMinutes())}`,
+      utc: `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}Z`,
+      rst: report || '', cls: cls || '', pic: '',
+    };
+    if (pendingPic && id === 'POSTCARD') { e.pic = pendingPic.url; if (pendingPic.caption) e.note = pendingPic.caption; pendingPic = null; }
+    entries.push(e);
+    store();
+    LP.say(`Logged: ${id}${f ? ', ' + f.toFixed(1) + ' kilohertz' : ''}${report ? ', report ' + report.split('').join(' ') : ''}.`);
     render();
     maybeNet();
+  }
+
+  /* pin the finished postcard to its line — your keepsake is the last picture
+     you sat with long enough to receive whole */
+  function attachPicture(url, caption) {
+    const e = entries.find(x => x.id === 'POSTCARD');
+    if (e) { e.pic = url; if (caption) e.note = caption; store(); render(); }
+    else pendingPic = { url, caption };  /* the line will get it when it's logged */
   }
 
   function render() {
@@ -1975,9 +2297,21 @@ LP.log = (() => {
       const li = document.createElement('li');
       if (e.cls) li.className = e.cls;
       const id = document.createElement('span'); id.className = 'id'; id.textContent = e.id;
-      const f = document.createElement('span'); f.className = 'f'; f.textContent = e.f ? `${e.f.toFixed(1)} · ${e.at}` : e.at;
+      const f = document.createElement('span'); f.className = 'f';
+      f.textContent = e.f ? `${e.f.toFixed(1)}${e.band ? ' · ' + e.band : ''}` : (e.band || '');
+      const meta = document.createElement('span'); meta.className = 'meta';
+      const bits = [];
+      if (e.utc) bits.push(e.utc); else if (e.at) bits.push(e.at);
+      if (e.rst) bits.push('RST ' + e.rst);
+      meta.textContent = bits.join('  ·  ');
       const note = document.createElement('span'); note.className = 'note'; note.textContent = e.note;
-      li.append(id, f, note);
+      li.append(id, f, meta, note);
+      if (e.pic) {
+        const img = document.createElement('img');
+        img.className = 'pic'; img.loading = 'lazy'; img.src = e.pic;
+        img.alt = `The received postcard: ${e.note || 'a picture'}.`;
+        li.appendChild(img);
+      }
       list.appendChild(li);
     }
   }
@@ -2003,13 +2337,13 @@ LP.log = (() => {
     let candidate = null;
     for (const st of LP.band.stations) {
       if (st.band !== LP.rx.band) continue;
-      if (st.type === 'night' && !st.isOn()) continue;
+      if (st.isOn && !st.isOn()) continue;
       const off = Math.abs(LP.rx.vfo - st.f);
       if (off < Math.max(st.bw * 0.9, 0.4)) { candidate = st; break; }
     }
     if (candidate && candidate.activity(t) > 0.05) lastActive = t;
     if (candidate && (candidate.id === (lockedOn && lockedOn.id))) {
-      if (t - lockT0 > 4200 && t - lastActive < 3000) add(candidate.id, candidate.f, candidate.note);
+      if (t - lockT0 > 4200 && t - lastActive < 3000) add(candidate.id, candidate.f, candidate.note, '', reportFor(candidate.id, t));
     } else {
       lockedOn = candidate;
       lockT0 = t;
@@ -2026,7 +2360,7 @@ LP.log = (() => {
   let lastCheckT = 0;
   render();
   return {
-    has, add, check, render, entries,
+    has, add, check, render, attachPicture, entries,
     /* the lock light means SIGNAL, not proximity: a station in its dead
        window doesn't light the readout */
     get lockedOn() { return (lockedOn && lastCheckT - lastActive < 3000) ? lockedOn.id : null; },
