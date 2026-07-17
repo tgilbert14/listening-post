@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://tgilbert14.github.io/listening-post/sitemap.xml

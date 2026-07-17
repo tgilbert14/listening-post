@@ -1,0 +1,1691 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Listening Post · a Desert Data Labs experience</title>
+<meta name="description" content="A shortwave receiver at 3 AM. Three bands, a waterfall, and voices in the static — beacons, a numbers station, a picture riding the noise, and something that listens back.">
+<meta property="og:title" content="The Listening Post · Desert Data Labs">
+<meta property="og:description" content="The band is open. Tune the dial: morse in the dark, a picture riding the noise, and something that listens back.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://tgilbert14.github.io/listening-post/">
+<meta property="og:image" content="https://tgilbert14.github.io/listening-post/og-card.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://tgilbert14.github.io/listening-post/og-card.jpg">
+<meta name="theme-color" content="#050807">
+<link rel="canonical" href="https://tgilbert14.github.io/listening-post/">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='6' y='22' width='52' height='30' rx='4' fill='none' stroke='%236fdd8b' stroke-width='4'/%3E%3Cpath d='M14 36 h6 M26 36 h10 M42 36 h8' stroke='%236fdd8b' stroke-width='4' stroke-linecap='round'/%3E%3Cpath d='M32 22 L48 8' stroke='%23d9a441' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
+</head>
+<body>
+<style>
+/* THE LISTENING POST — tokens. A radio room at 3 AM: near-black chassis,
+   phosphor green display glass, one amber pilot-lamp accent, pencil grey. */
+:root {
+  --void: #050807;           /* the room */
+  --chassis: #101413;        /* receiver metal */
+  --chassis-2: #181d1b;      /* raised panel */
+  --phos: #6fdd8b;           /* phosphor trace */
+  --phos-dim: #2e5c3c;       /* phosphor afterglow */
+  --phos-bright: #c9ffd4;    /* saturated peak */
+  --amber: #d9a441;          /* pilot lamp / tuned lock */
+  --pencil: #9aa39c;         /* engraved + pencil entries */
+  --pencil-dim: #5c655e;
+  --danger: #d96d5a;         /* meter redline */
+  --focus: #8fd0ff;
+
+  --mono: 'Consolas', 'SF Mono', 'Cascadia Mono', monospace;
+  --serif: Georgia, serif;
+}
+
+
+/* THE LISTENING POST — shell. One receiver, one waterfall, one dial. */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  background: var(--void);
+  color: var(--pencil);
+  font-family: var(--mono);
+  overflow: hidden;
+}
+
+/* the room: a cold spill of light from the display */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background:
+    radial-gradient(110vmax 70vmax at 50% 30%, rgba(111,221,139,.05) 0%, transparent 55%),
+    radial-gradient(80vmax 80vmax at 50% 115%, #020303 0%, transparent 60%);
+  pointer-events: none;
+}
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  clip-path: inset(50%); overflow: hidden; white-space: nowrap;
+}
+a.skip:focus-visible {
+  width: auto; height: auto; clip-path: none;
+  position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+  z-index: 60;
+  background: var(--chassis-2); color: var(--phos);
+  letter-spacing: .14em; text-decoration: none; text-transform: uppercase; font-size: 11px;
+  padding: 9px 16px; border: 1px solid var(--phos-dim);
+  outline: 2px solid var(--focus); outline-offset: 2px;
+}
+
+/* ---- masthead ---- */
+.masthead {
+  position: fixed; top: 24px; left: 30px; z-index: 30;
+}
+.masthead .eyebrow {
+  font-size: 10px; letter-spacing: .34em;
+  color: var(--pencil-dim);
+  text-transform: uppercase;
+  margin-bottom: 7px;
+}
+.masthead h1 {
+  font-family: var(--serif);
+  font-size: clamp(20px, 3vmin, 28px);
+  font-weight: 400;
+  font-variant: small-caps;
+  letter-spacing: .14em;
+  color: var(--pencil);
+}
+.masthead .sub {
+  font-size: 10px; letter-spacing: .26em;
+  color: var(--phos-dim);
+  margin-top: 6px;
+  text-transform: uppercase;
+}
+
+/* ---- the rig ---- */
+.rig {
+  position: fixed; inset: 0;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  padding: 76px 4vw 18px;
+  max-width: 1180px;
+  margin: 0 auto;
+  gap: 14px;
+}
+
+/* the glass: waterfall bezel */
+.glass {
+  position: relative;
+  border-radius: 10px;
+  background: #060a08;
+  border: 1px solid #223028;
+  box-shadow:
+    0 30px 70px rgba(0,0,0,.7),
+    inset 0 2px 22px rgba(0,0,0,.9),
+    inset 0 0 80px rgba(111,221,139,.04);
+  overflow: hidden;
+  min-height: 0;
+}
+#waterfall {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  display: block;
+  cursor: crosshair;
+  touch-action: none;
+}
+.glass::after { /* glass curvature glare */
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(158deg, rgba(255,255,255,.05) 0%, transparent 26%);
+  pointer-events: none;
+}
+
+/* ---- the panel ---- */
+.panel {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas:
+    "freq dial side"
+    "freq bands side";
+  gap: 10px 22px;
+  align-items: center;
+  background: linear-gradient(180deg, var(--chassis-2), var(--chassis));
+  border: 1px solid #232a26;
+  border-radius: 10px;
+  padding: 16px 22px;
+  box-shadow: 0 18px 50px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.05);
+}
+
+.freq {
+  grid-area: freq;
+  font-size: clamp(26px, 4.4vmin, 44px);
+  letter-spacing: .06em;
+  color: var(--phos);
+  text-shadow: 0 0 14px rgba(111,221,139,.45);
+  font-variant-numeric: tabular-nums;
+  min-width: 7.2ch;
+}
+.freq .khz { font-size: .38em; color: var(--phos-dim); letter-spacing: .2em; margin-left: 6px; }
+.freq.locked { color: var(--amber); text-shadow: 0 0 16px rgba(217,164,65,.5); }
+
+/* the dial: a brushed tuning strip */
+#dial {
+  grid-area: dial;
+  position: relative;
+  height: 46px;
+  border-radius: 6px;
+  background:
+    repeating-linear-gradient(90deg, #1b201d 0 7px, #232a26 7px 8px),
+    linear-gradient(180deg, #262d29, #141816);
+  border: 1px solid #2c342f;
+  box-shadow: inset 0 3px 8px rgba(0,0,0,.7);
+  cursor: ew-resize;
+  touch-action: none;
+}
+#dial::after { /* center index */
+  content: '';
+  position: absolute; left: 50%; top: -5px; bottom: -5px;
+  width: 2px;
+  background: var(--amber);
+  box-shadow: 0 0 8px rgba(217,164,65,.8);
+}
+#dial:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+
+.bands { grid-area: bands; display: flex; gap: 8px; }
+.side { grid-area: side; display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
+
+button.chip {
+  font-family: var(--mono);
+  font-size: 10px; letter-spacing: .22em; text-transform: uppercase;
+  color: var(--pencil);
+  background: #141917;
+  border: 1px solid #2b332e;
+  border-radius: 6px;
+  padding: 9px 14px 8px;
+  cursor: pointer;
+  transition: color .15s, border-color .15s, box-shadow .15s;
+}
+button.chip:hover { color: var(--phos); border-color: var(--phos-dim); }
+button.chip[aria-pressed="true"] {
+  color: var(--phos); border-color: var(--phos-dim);
+  box-shadow: inset 0 0 12px rgba(111,221,139,.15);
+}
+button.chip[aria-pressed="true"]::before { content: '\25CF\2002'; font-size: 7px; vertical-align: 2px; }
+button.chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* S-meter */
+#smeter { width: 132px; height: 46px; display: block; margin-left: auto; }
+
+/* ---- SSTV develop panel ---- */
+.develop {
+  position: fixed;
+  right: max(3vw, calc((100vw - 1180px) / 2 + 3vw));
+  top: 90px;
+  width: min(300px, 78vw);
+  background: var(--chassis-2);
+  border: 1px solid #2b332e;
+  border-radius: 8px;
+  padding: 10px;
+  box-shadow: 0 24px 60px rgba(0,0,0,.7);
+  z-index: 25;
+  transform: translateX(calc(100% + 6vw));
+  transition: transform .5s cubic-bezier(.2,.9,.25,1);
+}
+.develop.open { transform: none; }
+.develop canvas { width: 100%; display: block; border-radius: 4px; background: #060a08; image-rendering: pixelated; }
+.develop .strip {
+  display: flex; justify-content: space-between;
+  font-size: 9px; letter-spacing: .22em; color: var(--pencil-dim);
+  padding: 8px 2px 2px; text-transform: uppercase;
+}
+
+/* ---- the logbook ---- */
+.logbook {
+  position: fixed;
+  left: max(3vw, calc((100vw - 1180px) / 2 + 3vw));
+  top: 90px;
+  width: min(340px, 84vw);
+  max-height: calc(100vh - 200px);
+  overflow: auto;
+  background: linear-gradient(180deg, #14191662, #10141362);
+  backdrop-filter: blur(6px);
+  border: 1px solid #2b332e;
+  border-radius: 8px;
+  padding: 14px 16px;
+  z-index: 25;
+  transform: translateX(calc(-100% - 8vw));
+  transition: transform .5s cubic-bezier(.2,.9,.25,1);
+}
+.logbook.open { transform: none; }
+.logbook h2 {
+  font-size: 10px; letter-spacing: .3em; text-transform: uppercase;
+  color: var(--pencil-dim);
+  border-bottom: 1px solid #2b332e;
+  padding-bottom: 8px; margin-bottom: 6px;
+  font-weight: 400;
+}
+.logbook ol { list-style: none; }
+.logbook li {
+  padding: 8px 2px;
+  border-bottom: 1px dashed #232a26;
+  font-size: 12px;
+  color: var(--pencil);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 10px;
+}
+.logbook li .id { color: var(--phos); letter-spacing: .08em; }
+.logbook li .f { color: var(--amber); font-variant-numeric: tabular-nums; }
+.logbook li .note { grid-column: 1 / -1; color: var(--pencil-dim); font-size: 10.5px; letter-spacing: .04em; }
+.logbook li.empty { color: var(--pencil-dim); font-style: italic; border: 0; }
+.logbook li.net { color: var(--phos-bright); }
+.logbook li.net .id { color: var(--phos-bright); }
+
+/* ---- arrival ---- */
+.masthead, .panel, .glass { opacity: 1; transition: opacity 1.4s ease; }
+body.arriving .masthead, body.arriving .panel { opacity: 0; }
+
+/* ---- noscript brochure ---- */
+.brochure {
+  position: fixed; inset: 0; z-index: 40;
+  display: grid; place-items: center;
+  background: var(--void);
+  text-align: center;
+  padding: 5vmin;
+}
+.brochure svg { width: min(64vmin, 430px); height: auto; margin-bottom: 4vmin; }
+.brochure p {
+  font-variant: small-caps; letter-spacing: .18em;
+  color: var(--pencil); font-size: 15px; font-family: var(--serif);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .develop, .logbook { transition: none; }
+  .masthead, .panel, .glass { transition: none; }
+}
+
+@media (forced-colors: active) {
+  button.chip, #dial { border: 1px solid ButtonText; }
+  button.chip[aria-pressed="true"] { border: 3px double Highlight; forced-color-adjust: none; color: Highlight; }
+}
+
+/* phones: stack the panel */
+@media (max-width: 680px) {
+  .rig { padding: 66px 3vw 12px; gap: 10px; }
+  .masthead { top: 12px; left: 16px; }
+  .masthead .sub { display: none; }
+  .panel {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "dial dial"
+      "freq side"
+      "bands side";
+    padding: 12px 14px;
+    gap: 10px 12px;
+  }
+  .freq { font-size: 27px; }
+  #smeter { width: 104px; height: 38px; }
+  .develop { top: auto; bottom: 150px; }
+  .logbook { top: 66px; }
+}
+
+</style>
+<a class="sr-only skip" href="#dial">Skip to the dial</a>
+
+<header class="masthead">
+  <p class="eyebrow">Desert Data Labs</p>
+  <h1>The Listening Post</h1>
+  <p class="sub" id="sub-line">The band is open</p>
+</header>
+
+<main class="rig">
+  <div class="glass">
+    <canvas id="waterfall" aria-hidden="true"></canvas>
+  </div>
+
+  <div class="panel">
+    <p class="freq" id="freq" aria-hidden="true">— <span class="khz">kHz</span></p>
+
+    <div id="dial" role="slider" tabindex="0" aria-label="Tuning dial"
+         aria-valuemin="0" aria-valuemax="240" aria-valuenow="120"
+         aria-valuetext="" aria-describedby="sr-status"></div>
+
+    <div class="bands" role="group" aria-label="Bands">
+      <button class="chip band" id="band-0" disabled aria-pressed="true">Ground</button>
+      <button class="chip band" id="band-1" disabled aria-pressed="false">Sky</button>
+      <button class="chip band" id="band-2" disabled aria-pressed="false">High</button>
+    </div>
+
+    <div class="side">
+      <canvas id="smeter" aria-hidden="true"></canvas>
+      <button class="chip" id="log-toggle" disabled aria-pressed="false" aria-controls="logbook">Log</button>
+      <button class="chip" id="sound-toggle" disabled aria-pressed="false">Sound</button>
+    </div>
+  </div>
+
+  <aside class="develop" id="develop" aria-label="Picture decoder">
+    <canvas id="sstv" width="320" height="240"></canvas>
+    <p class="strip"><span id="sstv-id">—</span><span id="sstv-pct"></span></p>
+  </aside>
+
+  <aside class="logbook" id="logbook" aria-label="Station log" hidden>
+    <h2>Station Log</h2>
+    <ol id="log-list"></ol>
+  </aside>
+
+  <p class="sr-only" role="status" aria-live="polite" id="sr-status"></p>
+
+  <noscript>
+    <div class="brochure">
+      <div>
+        <svg viewBox="0 0 420 240" role="img" aria-label="A shortwave receiver: waterfall display, tuning dial, and a signal meter.">
+          <rect x="10" y="10" width="400" height="150" rx="8" fill="#060a08" stroke="#223028" stroke-width="2"/>
+          <g stroke="#6fdd8b" stroke-width="2" opacity=".9">
+            <path d="M60 20 V150" opacity=".55"/>
+            <path d="M118 20 V150" opacity=".3"/>
+            <path d="M210 20 V150" opacity=".8"/>
+            <path d="M300 20 V150" opacity=".4"/>
+            <path d="M352 20 V150" opacity=".6"/>
+          </g>
+          <g fill="#2e5c3c">
+            <rect x="20" y="40" width="380" height="1.6"/>
+            <rect x="20" y="74" width="380" height="1.2"/>
+            <rect x="20" y="112" width="380" height="1.4"/>
+          </g>
+          <rect x="10" y="176" width="400" height="52" rx="8" fill="#181d1b" stroke="#232a26" stroke-width="2"/>
+          <text x="30" y="209" fill="#6fdd8b" font-family="monospace" font-size="24">6 727.0</text>
+          <rect x="160" y="192" width="180" height="20" rx="4" fill="#141816" stroke="#2c342f"/>
+          <path d="M250 187 V217" stroke="#d9a441" stroke-width="2"/>
+          <circle cx="376" cy="202" r="10" fill="none" stroke="#d9a441" stroke-width="3"/>
+        </svg>
+        <p>A shortwave receiver at 3 AM. The band is open — voices in the static,<br>a picture riding the noise, and something that listens back.<br>JavaScript is the ionosphere here.</p>
+      </div>
+    </div>
+  </noscript>
+</main>
+
+<script>
+'use strict';
+/* THE LISTENING POST — boot. One namespace, one rAF ticker (stops when the
+   tab hides or nothing animates), storage with a seatbelt. */
+const LP = {};
+
+LP.store = {
+  get(k, d) { try { const v = localStorage.getItem('lp-' + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem('lp-' + k, JSON.stringify(v)); } catch { /* private mode */ } },
+};
+
+LP.rm = matchMedia('(prefers-reduced-motion: reduce)');
+LP.DPR = () => Math.min(devicePixelRatio || 1, 2);
+
+LP.ticker = (() => {
+  const tasks = new Set();
+  let rafId = null, last = 0;
+  function frame(now) {
+    rafId = null;
+    const dt = Math.min(50, now - last) || 16; last = now;
+    for (const t of [...tasks]) { if (t(dt, now) === false) tasks.delete(t); }
+    if (tasks.size && !document.hidden) rafId = requestAnimationFrame(frame);
+  }
+  function kick() { if (rafId === null && tasks.size && !document.hidden) { last = performance.now(); rafId = requestAnimationFrame(frame); } }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) kick(); });
+  return { add(t) { tasks.add(t); kick(); return () => tasks.delete(t); }, kick };
+})();
+
+LP.TAU = Math.PI * 2;
+LP.clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+LP.lerp = (a, b, t) => a + (b - a) * t;
+
+/* seeded PRNG for stable texture */
+LP.mulberry = (seed) => () => {
+  seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+  let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+  t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+  return ((t ^ t >>> 14) >>> 0) / 4294967296;
+};
+
+LP.say = (msg) => { const el = document.getElementById('sr-status'); if (el) el.textContent = msg; };
+
+
+/* THE LISTENING POST — the band. One model is the single source of truth:
+   the waterfall paints it and the audio engine sounds it, so what you see
+   is exactly what you hear.
+
+   All times are wall-clock ms — the stations keep transmitting whether or
+   not anyone is rendering, and two visitors at the same minute hear the
+   same traffic. The numbers station reads a schedule seeded by the DAY. */
+LP.band = (() => {
+  const BANDS = [
+    { name: 'GROUND', lo: 3200, hi: 3440 },
+    { name: 'SKY', lo: 6600, hi: 6840 },
+    { name: 'HIGH', lo: 9300, hi: 9540 },
+  ];
+
+  /* ---------- morse ---------- */
+  const MORSE = {
+    A: '.-', B: '-...', C: '-.-.', D: '-..', E: '.', F: '..-.', G: '--.', H: '....',
+    I: '..', J: '.---', K: '-.-', L: '.-..', M: '--', N: '-.', O: '---', P: '.--.',
+    Q: '--.-', R: '.-.', S: '...', T: '-', U: '..-', V: '...-', W: '.--', X: '-..-',
+    Y: '-.--', Z: '--..', 0: '-----', 1: '.----', 2: '..---', 3: '...--', 4: '....-',
+    5: '.....', 6: '-....', 7: '--...', 8: '---..', 9: '----.', '?': '..--..', '/': '-..-.',
+  };
+  /* compile text -> [ [onMs, offMs], ... ] repeating pattern + total length */
+  function compileMorse(text, wpm, tailMs) {
+    const unit = 1200 / wpm;
+    const spans = []; /* {on, t0, t1} flattened to on-intervals */
+    let t = 0;
+    for (const word of text.toUpperCase().split(' ')) {
+      for (const ch of word) {
+        const code = MORSE[ch];
+        if (!code) continue;
+        for (const sym of code) {
+          const d = (sym === '-' ? 3 : 1) * unit;
+          spans.push([t, t + d]);
+          t += d + unit;
+        }
+        t += unit * 2; /* char gap = 3 total */
+      }
+      t += unit * 4;   /* word gap = 7 total */
+    }
+    return { spans, total: t + (tailMs || 1500) };
+  }
+  function morseOn(compiled, tMs) {
+    const m = tMs % compiled.total;
+    /* spans are sorted; a coarse scan is fine at these sizes */
+    for (let i = 0; i < compiled.spans.length; i++) {
+      const s = compiled.spans[i];
+      if (m < s[0]) return false;
+      if (m < s[1]) return true;
+    }
+    return false;
+  }
+
+  /* ---------- the day's numbers ---------- */
+  const daySeed = () => {
+    const d = new Date();
+    return d.getFullYear() * 1000 + Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 86400000);
+  };
+  function latticeGroups() {
+    const rnd = LP.mulberry(daySeed());
+    const groups = [];
+    for (let g = 0; g < 5; g++) {
+      let s = '';
+      for (let i = 0; i < 5; i++) s += Math.floor(rnd() * 10);
+      groups.push(s);
+    }
+    return groups;
+  }
+
+  /* ---------- station definitions ---------- */
+  /* Every station: { id, name, f (kHz), band, bw (kHz, display), type, note }
+     plus type params. activity(tMs) -> 0..1 keying, computed on demand. */
+  const S = [];
+
+  /* the net: when it fires, every keyed station sends the same three
+     characters in unison, once, for a new listener */
+  const net = { until: 0, m: compileMorse('73 73 73', 14, 2600) };
+
+  const beacon = (id, f, band, text, wpm, pitchBias, note) => S.push({
+    id, name: id, f, band, type: 'beacon', bw: 0.12, wpm, pitchBias, note,
+    _m: compileMorse(text, wpm, 2200), text,
+    activity(t) {
+      if (t < net.until) return morseOn(net.m, t % net.m.total) ? 1 : 0;
+      return morseOn(this._m, t) ? 1 : 0;
+    },
+  });
+
+  beacon('VLT-4', 3305.0, 0, 'VVV DE VLT4 VLT4 QTH DUST SEA K', 13, 0, 'keys the same watch, all night');
+  beacon('KST-2', 9472.0, 2, 'DE KST2 KST2 73 73', 17, 60, 'says goodbye over and over');
+  beacon('MRD-8', 9350.0, 2, 'DE MRD8 BCN GRID DM42 DM42', 15, -40, 'a beacon that knows where it lives');
+
+  /* THE LATTICE: a Buzzer. Carrier + rasping buzz; five groups of five,
+     read in tone-digits every other minute, changing daily. */
+  S.push({
+    id: 'THE LATTICE', name: 'THE LATTICE', f: 6727.0, band: 1, type: 'buzzer', bw: 0.5,
+    note: 'five groups of five; different tomorrow',
+    groups: latticeGroups(),
+    /* cycle: 120s. 0-84s buzz at 1.25s period; 84-118s the digits. */
+    phase(t) {
+      const m = t % 120000;
+      if (m < 84000) return { mode: 'buzz', on: (m % 1250) < 820 };
+      const dt = m - 84000;
+      const digitIx = Math.floor(dt / 520);
+      const groups = this.groups.join('');
+      if (digitIx < groups.length + 5) {
+        /* a gap every 5 digits */
+        const withGaps = Math.floor(digitIx / 6);
+        const inGroup = digitIx % 6;
+        if (inGroup === 5) return { mode: 'gap' };
+        const gi = withGaps * 5 + inGroup;
+        if (gi < groups.length) {
+          const on = (dt % 520) < 380;
+          return { mode: 'digit', digit: +groups[gi], on };
+        }
+      }
+      return { mode: 'gap' };
+    },
+    activity(t) { const p = this.phase(t); return p.on ? 1 : (p.mode === 'gap' ? 0 : 0.12); },
+  });
+
+  /* THE FORECAST: RTTY, 45 baud FSK. The decoded text is the only prose
+     the fiction allows itself — a desert shipping forecast. */
+  S.push({
+    id: 'THE FORECAST', name: 'THE FORECAST', f: 3388.0, band: 0, type: 'rtty', bw: 0.45,
+    note: 'the weather for places without weather stations',
+    text: 'SECTOR ONE CLEAR WIND LIGHT SW DUST RISING BY DAWN + SECTOR TWO STILL AIR MOONSET 0341 + SECTOR THREE HEAT LOW GOOD PASSAGE + ALL SECTORS THE BAND IS OPEN + ',
+    baud: 45.45,
+    activity(t) { const m = t % 34000; return m < 30000 ? 1 : 0; },
+    charAt(t) {
+      const m = t % 34000;
+      if (m >= 30000) return null;
+      const cps = 6; /* display pace, characters per second */
+      return this.text[Math.floor(m / 1000 * cps) % this.text.length];
+    },
+  });
+
+  /* AURORA: a distant music programme, warm and lowpassed. */
+  S.push({
+    id: 'AURORA', name: 'AURORA', f: 6785.0, band: 1, type: 'music', bw: 4.2,
+    note: 'someone, somewhere, is playing records',
+    activity(t) { const m = t % 52000; return m < 47000 ? 1 : 0.15; },
+  });
+
+  /* HOMECOMING: only after dark, local. Eleven slow tones. */
+  S.push({
+    id: 'HOMECOMING', name: 'HOMECOMING', f: 6810.0, band: 1, type: 'night', bw: 0.8,
+    note: 'eleven tones, only after dark',
+    isOn() { const h = new Date().getHours(); return h >= 21 || h < 6; },
+    activity(t) {
+      if (!this.isOn()) return 0;
+      const m = t % 26000;
+      const ix = Math.floor(m / 2000);
+      if (ix >= 11) return 0;                 /* rest after the eleventh */
+      return (m % 2000) < 1400 ? 1 : 0;
+    },
+    toneIx(t) { const m = t % 26000; const ix = Math.floor(m / 2000); return ix < 11 ? ix : -1; },
+  });
+
+  /* POSTCARD: SSTV. Six-minute cycle — 200s of picture, then a CW ident. */
+  S.push({
+    id: 'POSTCARD', name: 'POSTCARD', f: 9430.0, band: 2, type: 'sstv', bw: 2.4,
+    note: 'a picture, thirty-two lines at a time',
+    _m: compileMorse('DE POSTCARD PIC QRV', 16, 3000),
+    PERIOD: 360000, TX: 200000,
+    prog(t) { const m = t % this.PERIOD; return m < this.TX ? m / this.TX : -1; },
+    activity(t) {
+      const m = t % this.PERIOD;
+      if (m < this.TX) return 1;
+      if (m > this.TX + 8000 && m < this.TX + 40000) return morseOn(this._m, m - this.TX - 8000) ? 1 : 0;
+      return 0;
+    },
+  });
+
+  /* ---------- propagation: slow QSB fading, per station ---------- */
+  function fade(st, t) {
+    const seed = st.f * 7.3;
+    return 0.62
+      + 0.28 * Math.sin(t / 9000 + seed)
+      + 0.10 * Math.sin(t / 2300 + seed * 1.7);
+  }
+  function strength(st, t) {
+    if (st.type === 'night' && !st.isOn()) return 0;
+    return LP.clamp(fade(st, t), 0.12, 1);
+  }
+
+  /* ---------- the ghost ---------- */
+  /* THE OTHER is not in the station list: it has no frequency until it
+     chooses yours. State machine lives here; interact feeds it dwell. */
+  const ghost = {
+    state: 'asleep',      /* asleep | approaching | holding | asking | gone */
+    f: 0, t0: 0, heard: false,
+    _m: compileMorse('QRZ? QRZ?', 12, 400),
+    tune(vfo, dwellMs, nearStation) {
+      if (this.state === 'gone' || document.hidden) return;
+      const t = performance.now();
+      if (this.state === 'asleep') {
+        if (dwellMs > 20000 && !nearStation) {
+          this.state = 'approaching';
+          this.f = vfo + 1.8;
+          this.t0 = t;
+        }
+      } else if (this.state === 'approaching') {
+        /* drift toward the visitor's frequency — about nine patient seconds */
+        this.f = LP.lerp(this.f, vfo, 0.0075);
+        if (Math.abs(this.f - vfo) < 0.03) { this.state = 'holding'; this.t0 = t; }
+        if (dwellMs < 400) { this.state = 'asleep'; } /* they moved; it loses the scent */
+      } else if (this.state === 'holding') {
+        this.f = LP.lerp(this.f, vfo, 0.02);
+        if (t - this.t0 > 9000) { this.state = 'asking'; this.t0 = t; }
+        if (dwellMs < 400) { this.state = 'asleep'; }
+      } else if (this.state === 'asking') {
+        if (t - this.t0 > 14000) { this.state = 'gone'; }
+      }
+    },
+    activity(t) {
+      if (this.state === 'approaching' || this.state === 'holding') return 0.9;
+      if (this.state === 'asking') return morseOn(this._m, performance.now() - this.t0) ? 1 : 0;
+      return 0;
+    },
+    strength() {
+      if (this.state === 'approaching') return 0.35;
+      if (this.state === 'holding') return 0.5;
+      if (this.state === 'asking') return 0.62;
+      return 0;
+    },
+  };
+
+  /* ---------- spectrum synthesis for the waterfall ---------- */
+  /* one row: intensity 0..1 per column across [fLo..fHi] at time t */
+  const sferic = { until: 0, level: 0 };
+  function spectrumRow(out, fLo, fHi, t, bandIx, rng) {
+    const cols = out.length;
+    const noiseBase = 0.055 + bandIx * 0.012;
+    /* lightning crash: rare, broadband, decays over a few rows */
+    if (t > sferic.until && rng() < 0.006) { sferic.until = t + 140 + rng() * 400; sferic.level = 0.25 + rng() * 0.5; }
+    const crash = t < sferic.until ? sferic.level * (0.4 + 0.6 * rng()) : 0;
+    for (let i = 0; i < cols; i++) {
+      out[i] = noiseBase * (0.4 + rng() * 1.1) + crash * (0.5 + rng() * 0.5);
+    }
+    for (const st of S) {
+      if (st.band !== bandIx) continue;
+      const a = st.activity(t) * strength(st, t);
+      if (a <= 0.001) continue;
+      paint(out, fLo, fHi, st.f, st.bw, a, st, t);
+    }
+    if (ghost.state !== 'asleep' && ghost.state !== 'gone') {
+      const a = ghost.activity(t) * ghost.strength();
+      if (a > 0.001) paint(out, fLo, fHi, ghost.f, 0.1, a, null, t);
+    }
+    return out;
+  }
+  function paint(out, fLo, fHi, f, bw, amp, st, t) {
+    const cols = out.length;
+    const span = fHi - fLo;
+    const center = (f - fLo) / span * cols;
+    const sigma = Math.max(0.7, bw / span * cols / 2);
+    /* type texture: rtty is two tones; music/sstv fill their bandwidth */
+    if (st && st.type === 'rtty') {
+      const off = 0.17 / span * cols / 2;
+      splat(out, center - off, sigma * 0.5, amp);
+      splat(out, center + off, sigma * 0.5, amp * 0.9);
+      return;
+    }
+    if (st && st.type === 'sstv') {
+      /* the picture is a textured band: scan-line shimmer */
+      const w = Math.max(2, sigma * 2);
+      for (let i = Math.max(0, Math.floor(center - w)); i < Math.min(cols, center + w); i++) {
+        out[i] += amp * (0.35 + 0.65 * Math.abs(Math.sin(i * 1.7 + t / 60)));
+      }
+      return;
+    }
+    if (st && st.type === 'music') {
+      const w = Math.max(2, sigma * 2);
+      for (let i = Math.max(0, Math.floor(center - w)); i < Math.min(cols, center + w); i++) {
+        const x = (i - center) / w;
+        out[i] += amp * Math.max(0, 1 - x * x) * (0.35 + 0.4 * Math.abs(Math.sin(i * 0.9 + t / 140)));
+      }
+      /* carrier spike in the middle */
+      splat(out, center, 1, amp * 1.2);
+      return;
+    }
+    splat(out, center, sigma, amp);
+  }
+  function splat(out, center, sigma, amp) {
+    const cols = out.length;
+    const from = Math.max(0, Math.floor(center - sigma * 4));
+    const to = Math.min(cols - 1, Math.ceil(center + sigma * 4));
+    for (let i = from; i <= to; i++) {
+      const x = (i - center) / sigma;
+      out[i] += amp * Math.exp(-x * x / 2);
+    }
+  }
+
+  return { BANDS, stations: S, strength, spectrumRow, ghost, latticeGroups, compileMorse, morseOn, sferic, net };
+})();
+
+/* the receiver state: one VFO, one band. Arrival parks it a nudge below
+   AURORA so the first drag of the dial tunes INTO the music. */
+LP.rx = { band: 1, vfo: 6779.0, dwellT0: performance.now() };
+
+
+
+/* THE LISTENING POST — audio. Zero audio files. The same band model the
+   waterfall paints is rendered here as sound: CW beats against the BFO so
+   pitch follows your tuning error, the buzzer rasps, the RTTY diddles,
+   AURORA plays actual music through 2,000 miles of ionosphere, and the
+   ghost is a heterodyne whistle falling toward zero-beat.
+
+   THE LAW: no sound before an activation-bearing gesture; the chip never
+   claims ON until the context runs; opt-out is remembered; hidden tabs
+   are silent. */
+LP.audio = (() => {
+  let ctx = null, master = null, noiseGain = null, crashGain = null;
+  let enabled = LP.store.get('sound', true);
+  const chip = document.getElementById('sound-toggle');
+  const voices = new Map();   /* station id -> voice */
+  let smeter = 0;             /* 0..1, for the needle */
+
+  function build() {
+    if (ctx) return;
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -20; comp.knee.value = 22; comp.ratio.value = 5;
+    master = ctx.createGain();
+    master.gain.value = 0.85;
+    master.connect(comp).connect(ctx.destination);
+
+    /* the noise floor: band hiss, shaped */
+    const len = ctx.sampleRate * 2;
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    const noise = ctx.createBufferSource();
+    noise.buffer = buf; noise.loop = true;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.frequency.value = 1100; bp.Q.value = 0.5;
+    noiseGain = ctx.createGain();
+    noiseGain.gain.value = 0.05;
+    noise.connect(bp).connect(noiseGain).connect(master);
+    noise.start();
+
+    /* lightning crashes ride a separate wideband path */
+    const nz2 = ctx.createBufferSource();
+    nz2.buffer = buf; nz2.loop = true; nz2.playbackRate.value = 0.7;
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass'; hp.frequency.value = 300;
+    crashGain = ctx.createGain(); crashGain.gain.value = 0;
+    nz2.connect(hp).connect(crashGain).connect(master);
+    nz2.start();
+
+    document.addEventListener('visibilitychange', () => {
+      if (!ctx) return;
+      if (document.hidden) ctx.suspend();
+      else if (enabled) ctx.resume().then(reflect).catch(reflect);
+    });
+    ctx.onstatechange = reflect;
+  }
+
+  function reflect() {
+    const on = !!(ctx && ctx.state === 'running' && enabled);
+    if (chip) chip.setAttribute('aria-pressed', String(on));
+  }
+  function arm() {
+    if (!enabled) return;
+    build();
+    if (ctx.state !== 'running') ctx.resume().then(reflect).catch(reflect);
+    else reflect();
+  }
+  function toggle() {
+    enabled = !enabled;
+    LP.store.set('sound', enabled);
+    if (enabled) { build(); ctx.resume().then(reflect).catch(reflect); LP.say('Sound on.'); }
+    else { if (ctx) ctx.suspend(); reflect(); LP.say('Sound off.'); }
+  }
+  if (chip) chip.addEventListener('click', toggle);
+
+  const audible = () => ctx && ctx.state === 'running' && enabled;
+
+  /* ---------- voices ---------- */
+  function mkVoice(st) {
+    const g = ctx.createGain(); g.gain.value = 0;
+    g.connect(master);
+    const v = { g, st, nodes: [] };
+    const osc = (type, freq) => {
+      const o = ctx.createOscillator();
+      o.type = type; o.frequency.value = freq;
+      o.start();
+      v.nodes.push(o);
+      return o;
+    };
+
+    if (st.type === 'beacon' || st.type === 'ghostcw') {
+      v.o = osc('sine', 600);
+      v.o.connect(g);
+    } else if (st.type === 'buzzer') {
+      v.o = osc('sawtooth', 238);
+      const f = ctx.createBiquadFilter();
+      f.type = 'bandpass'; f.frequency.value = 640; f.Q.value = 1.6;
+      v.o.connect(f).connect(g);
+      v.digit = osc('sine', 500);
+      v.digitG = ctx.createGain(); v.digitG.gain.value = 0;
+      v.digit.connect(v.digitG).connect(g);
+    } else if (st.type === 'rtty') {
+      v.o = osc('sine', 935);
+      const lfo = osc('square', st.baud / 2);
+      const dep = ctx.createGain(); dep.gain.value = 85;
+      lfo.connect(dep).connect(v.o.frequency);
+      v.o.connect(g);
+    } else if (st.type === 'night') {
+      v.o = osc('sine', 220);
+      const echoIn = ctx.createGain();
+      const dl = ctx.createDelay(1.2); dl.delayTime.value = 0.62;
+      const fb = ctx.createGain(); fb.gain.value = 0.42;
+      v.toneG = ctx.createGain(); v.toneG.gain.value = 0;
+      v.o.connect(v.toneG).connect(echoIn);
+      echoIn.connect(g);
+      echoIn.connect(dl); dl.connect(fb); fb.connect(dl); dl.connect(g);
+      v.lastTone = -1;
+    } else if (st.type === 'sstv') {
+      v.o = osc('sine', 1500);
+      const sg = ctx.createGain(); sg.gain.value = 0.55;
+      v.o.connect(sg).connect(g);
+    } else if (st.type === 'music') {
+      /* AURORA's little orchestra: lead + bass through a warm lowpass + echo */
+      v.bus = ctx.createGain(); v.bus.gain.value = 0.9;
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass'; lp.frequency.value = 2100; lp.Q.value = 0.4;
+      const dl = ctx.createDelay(1); dl.delayTime.value = 0.34;
+      const fb = ctx.createGain(); fb.gain.value = 0.35;
+      v.bus.connect(lp).connect(g);
+      lp.connect(dl); dl.connect(fb); fb.connect(dl); dl.connect(g);
+      v.nextNote = 0; v.step = 0;
+      v.scale = [0, 3, 5, 7, 10, 12, 15];
+      v.rng = LP.mulberry(20260716 + new Date().getDate());
+    }
+    return v;
+  }
+
+  function killVoice(v) {
+    for (const n of v.nodes) { try { n.stop(); } catch { } }
+    try { v.g.disconnect(); } catch { }
+  }
+
+  /* per-frame render: called by the display loop with wall time */
+  function update(t) {
+    if (!ctx) return;
+    smeter = 0;
+    if (!audible()) return;
+    const rx = LP.rx;
+    const B = LP.band.BANDS[rx.band];
+    const now = ctx.currentTime;
+    const K = 0.012; /* keying time-constant */
+
+    /* which stations are within earshot (±5 kHz) */
+    const near = new Set();
+    for (const st of LP.band.stations) {
+      if (st.band !== rx.band) continue;
+      const off = rx.vfo - st.f;
+      if (Math.abs(off) > 5) continue;
+      near.add(st.id);
+      let v = voices.get(st.id);
+      if (!v) { v = mkVoice(st); voices.set(st.id, v); }
+      const act = st.activity(t);
+      const str = LP.band.strength(st, t);
+      /* selectivity: how much of it lands in the passband */
+      const sel = Math.exp(-(off * off) / (2 * Math.pow(Math.max(st.bw, 0.35) * 0.9, 2)));
+      let vol = act * str * sel;
+      smeter = Math.max(smeter, str * sel * (0.4 + 0.6 * act));
+
+      if (st.type === 'beacon') {
+        /* CW against the BFO: pitch IS your tuning error */
+        const pitch = LP.clamp(300 + Math.abs(off) * 700 + (st.pitchBias || 0), 220, 1900);
+        v.o.frequency.setTargetAtTime(pitch, now, 0.03);
+        v.g.gain.setTargetAtTime(vol * 0.30, now, K);
+      } else if (st.type === 'buzzer') {
+        const p = st.phase(t);
+        v.g.gain.setTargetAtTime((p.on && p.mode === 'buzz' ? 1 : 0.06) * str * sel * 0.26, now, K);
+        if (p.mode === 'digit' && p.on) {
+          v.digit.frequency.setTargetAtTime(430 + p.digit * 74, now, 0.01);
+          v.digitG.gain.setTargetAtTime(0.5, now, K);
+        } else {
+          v.digitG.gain.setTargetAtTime(0, now, K);
+        }
+      } else if (st.type === 'rtty') {
+        v.g.gain.setTargetAtTime(vol * 0.16, now, K);
+      } else if (st.type === 'night') {
+        v.g.gain.setTargetAtTime(str * sel * 0.5, now, 0.05);
+        const ix = st.toneIx(t);
+        if (ix >= 0 && ix !== v.lastTone && st.activity(t) > 0) {
+          v.lastTone = ix;
+          /* eleven tones: a slow minor climb that resolves */
+          const semis = [0, 3, 5, 7, 10, 12, 15, 17, 19, 22, 24][ix];
+          v.o.frequency.setValueAtTime(164.81 * Math.pow(2, semis / 12), now);
+          v.toneG.gain.cancelScheduledValues(now);
+          v.toneG.gain.setValueAtTime(0.0001, now);
+          v.toneG.gain.exponentialRampToValueAtTime(0.5, now + 0.06);
+          v.toneG.gain.exponentialRampToValueAtTime(0.0001, now + 1.35);
+        }
+        if (ix === -1) v.lastTone = -1;
+      } else if (st.type === 'sstv') {
+        const prog = st.prog(t);
+        if (prog >= 0 && LP.sstv) {
+          v.o.frequency.setTargetAtTime(1200 + LP.sstv.lumaAt(prog) * 1100, now, 0.008);
+          v.g.gain.setTargetAtTime(vol * 0.14, now, K);
+        } else {
+          /* the CW ident between pictures */
+          v.o.frequency.setTargetAtTime(740, now, 0.02);
+          v.g.gain.setTargetAtTime(st.activity(t) * str * sel * 0.2, now, K);
+        }
+      } else if (st.type === 'music') {
+        v.g.gain.setTargetAtTime(vol * 0.5, now, 0.05);
+        /* schedule the little tune ahead of time */
+        while (v.nextNote < now + 0.25) {
+          const when = Math.max(v.nextNote, now + 0.02);
+          const beat = 0.32;
+          const deg = v.scale[Math.floor(v.rng() * v.scale.length)];
+          if (v.step % 4 === 0) note(v.bus, 110 * Math.pow(2, (v.step % 8 === 0 ? 0 : 7) / 12), when, beat * 3.4, 'triangle', 0.16);
+          if (v.rng() < 0.82) note(v.bus, 440 * Math.pow(2, deg / 12), when, beat * (v.rng() < 0.3 ? 1.9 : 0.95), 'sine', 0.14);
+          v.nextNote = when + beat;
+          v.step++;
+        }
+      }
+    }
+
+    /* the ghost: a carrier with no name */
+    const gh = LP.band.ghost;
+    if (gh.state !== 'asleep' && gh.state !== 'gone') {
+      near.add('THE OTHER');
+      let v = voices.get('THE OTHER');
+      if (!v) { v = mkVoice({ type: 'ghostcw', id: 'THE OTHER' }); voices.set('THE OTHER', v); }
+      const off = Math.abs(LP.rx.vfo - gh.f);
+      if (gh.state === 'asking') {
+        v.o.frequency.setTargetAtTime(478, now, 0.02);
+        v.g.gain.setTargetAtTime(gh.activity(t) * 0.24, now, K);
+      } else {
+        /* heterodyne: the whistle falls as it closes on you */
+        const beat = LP.clamp(off * 1000, 24, 2400);
+        v.o.frequency.setTargetAtTime(beat, now, 0.03);
+        v.g.gain.setTargetAtTime(gh.strength() * 0.2 * Math.exp(-off * off / 4), now, 0.05);
+      }
+      smeter = Math.max(smeter, gh.strength() * 0.8);
+    }
+
+    /* silence + release voices that drifted out of earshot */
+    for (const [id, v] of voices) {
+      if (!near.has(id)) {
+        v.g.gain.setTargetAtTime(0, now, 0.05);
+        if (!v._dieAt) v._dieAt = t + 1200;
+        else if (t > v._dieAt) { killVoice(v); voices.delete(id); }
+      } else v._dieAt = 0;
+    }
+
+    /* noise floor swells when nothing is tuned; crashes follow the sky */
+    noiseGain.gain.setTargetAtTime(0.028 + 0.05 * (1 - Math.min(1, smeter * 1.6)), now, 0.2);
+    const sf = LP.band.sferic;
+    crashGain.gain.setTargetAtTime(t < sf.until ? sf.level * 0.16 : 0, now, 0.02);
+  }
+
+  function note(bus, freq, when, dur, type, amp) {
+    const o = ctx.createOscillator();
+    o.type = type; o.frequency.value = freq;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, when);
+    g.gain.exponentialRampToValueAtTime(amp, when + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+    o.connect(g).connect(bus);
+    o.start(when); o.stop(when + dur + 0.1);
+  }
+
+  return { arm, toggle, update, reflect, get smeter() { return smeter; }, get enabled() { return enabled; } };
+})();
+
+
+/* THE LISTENING POST — the glass. A phosphor waterfall of a 48 kHz window
+   around the VFO, a full-band ribbon above it, a falling-raster history
+   below the scan line. Reduced motion swaps the scroll for a still
+   spectrum graph, redrawn gently.
+
+   This file also owns the master loop: model → audio → glass → meter. */
+LP.display = (() => {
+  const cv = document.getElementById('waterfall');
+  const cx = cv.getContext('2d');
+  const meter = document.getElementById('smeter');
+  const mx = meter.getContext('2d');
+  const freqEl = document.getElementById('freq');
+  const WIN = 48;             /* kHz visible in the waterfall */
+  const COLS = 512;
+  const ROWS = 300;
+
+  /* offscreen raster */
+  const wf = document.createElement('canvas');
+  wf.width = COLS; wf.height = ROWS;
+  const wx = wf.getContext('2d');
+  wx.fillStyle = '#03100a'; wx.fillRect(0, 0, COLS, ROWS);
+
+  /* phosphor LUT */
+  const LUT = new Uint8ClampedArray(256 * 3);
+  for (let i = 0; i < 256; i++) {
+    const x = i / 255;
+    const r = x < .55 ? x * 30 : 30 + (x - .55) * 420;
+    const g = 18 + x * 225;
+    const b = x < .5 ? 14 + x * 60 : 44 + (x - .5) * 140;
+    LUT[i * 3] = x < .04 ? 3 : r;
+    LUT[i * 3 + 1] = x < .04 ? 14 : g;
+    LUT[i * 3 + 2] = x < .04 ? 8 : b;
+  }
+  const rowImg = wx.createImageData(COLS, 1);
+  const rowBuf = new Float32Array(COLS);
+  const ribbonBuf = new Float32Array(COLS);
+  const rng = LP.mulberry(9130);
+
+  let lastRow = 0, lastRibbon = 0, ribbonImg = null;
+
+  function pushRow(t) {
+    const B = LP.band.BANDS[LP.rx.band];
+    const fLo = LP.rx.vfo - WIN / 2, fHi = LP.rx.vfo + WIN / 2;
+    LP.band.spectrumRow(rowBuf, fLo, fHi, t, LP.rx.band, rng);
+    const d = rowImg.data;
+    for (let i = 0; i < COLS; i++) {
+      const v = Math.min(255, Math.floor(rowBuf[i] * 340));
+      d[i * 4] = LUT[v * 3]; d[i * 4 + 1] = LUT[v * 3 + 1]; d[i * 4 + 2] = LUT[v * 3 + 2]; d[i * 4 + 3] = 255;
+    }
+    /* scroll down one, new row on top */
+    wx.drawImage(wf, 0, 0, COLS, ROWS - 1, 0, 1, COLS, ROWS - 1);
+    wx.putImageData(rowImg, 0, 0);
+  }
+
+  function ribbon(t) {
+    /* the whole band at a glance, redrawn at 2 fps */
+    const B = LP.band.BANDS[LP.rx.band];
+    LP.band.spectrumRow(ribbonBuf, B.lo, B.hi, t, LP.rx.band, rng);
+    if (!ribbonImg) ribbonImg = wx.createImageData(COLS, 1);
+    const d = ribbonImg.data;
+    for (let i = 0; i < COLS; i++) {
+      const v = Math.min(255, Math.floor(ribbonBuf[i] * 300));
+      d[i * 4] = LUT[v * 3]; d[i * 4 + 1] = LUT[v * 3 + 1]; d[i * 4 + 2] = LUT[v * 3 + 2]; d[i * 4 + 3] = 255;
+    }
+  }
+
+  function draw(t) {
+    const w = cv.width, h = cv.height;
+    if (!w) return;
+    cx.clearRect(0, 0, w, h);
+    const ribbonH = Math.max(14, h * 0.05);
+    const scaleH = Math.max(18, h * 0.055);
+    const wfY = ribbonH + 6;
+    const wfH = h - wfY - scaleH;
+
+    /* ribbon: full band + logged pencil ticks + the cursor */
+    if (ribbonImg) {
+      const tmp = document.createElement('canvas'); /* cached below after first use */
+      cx.imageSmoothingEnabled = false;
+      if (!draw._rb) { draw._rb = document.createElement('canvas'); draw._rb.width = COLS; draw._rb.height = 1; }
+      draw._rb.getContext('2d').putImageData(ribbonImg, 0, 0);
+      cx.drawImage(draw._rb, 0, 0, COLS, 1, 0, 0, w, ribbonH);
+      cx.imageSmoothingEnabled = true;
+    }
+    const B = LP.band.BANDS[LP.rx.band];
+    for (const st of LP.band.stations) {
+      if (st.band !== LP.rx.band || !LP.log.has(st.id)) continue;
+      const x = (st.f - B.lo) / (B.hi - B.lo) * w;
+      cx.strokeStyle = 'rgba(154,163,156,.8)';
+      cx.lineWidth = 1;
+      cx.beginPath(); cx.moveTo(x - 3, ribbonH + 3); cx.lineTo(x, ribbonH - 2); cx.lineTo(x + 3, ribbonH + 3); cx.stroke();
+    }
+    const cursorX = (LP.rx.vfo - B.lo) / (B.hi - B.lo) * w;
+    cx.fillStyle = 'rgba(217,164,65,.9)';
+    cx.fillRect(cursorX - 1, 0, 2, ribbonH + 4);
+
+    /* waterfall window (or the rm spectrum graph) */
+    if (LP.rm.matches) {
+      /* designed still: the current row as a line graph */
+      cx.strokeStyle = 'rgba(111,221,139,.85)';
+      cx.lineWidth = 1.5;
+      cx.beginPath();
+      for (let i = 0; i < COLS; i++) {
+        const x = i / COLS * w;
+        const y = wfY + wfH - Math.min(1, rowBuf[i] * 1.4) * wfH * 0.92;
+        i === 0 ? cx.moveTo(x, y) : cx.lineTo(x, y);
+      }
+      cx.stroke();
+      cx.strokeStyle = 'rgba(46,92,60,.5)';
+      cx.strokeRect(0.5, wfY + .5, w - 1, wfH - 1);
+    } else {
+      cx.imageSmoothingEnabled = false;
+      cx.drawImage(wf, 0, 0, COLS, ROWS, 0, wfY, w, wfH);
+      cx.imageSmoothingEnabled = true;
+    }
+
+    /* center line: where you are listening */
+    cx.fillStyle = 'rgba(217,164,65,.55)';
+    cx.fillRect(w / 2 - .5, wfY, 1, wfH);
+    cx.fillStyle = 'rgba(217,164,65,.9)';
+    cx.beginPath();
+    cx.moveTo(w / 2 - 5, wfY); cx.lineTo(w / 2 + 5, wfY); cx.lineTo(w / 2, wfY + 7);
+    cx.closePath(); cx.fill();
+
+    /* frequency scale */
+    const fLo = LP.rx.vfo - WIN / 2;
+    cx.font = `${Math.max(9, h * 0.028)}px Consolas, monospace`;
+    cx.textAlign = 'center';
+    const first = Math.ceil(fLo / 5) * 5;
+    for (let f = first; f < fLo + WIN; f += 5) {
+      const x = (f - fLo) / WIN * w;
+      cx.fillStyle = 'rgba(154,163,156,.25)';
+      cx.fillRect(x, wfY + wfH, 1, 5);
+      cx.fillStyle = 'rgba(154,163,156,.55)';
+      cx.fillText(String(f), x, h - 5);
+    }
+  }
+
+  /* ---------- S-meter ---------- */
+  let needle = 0;
+  function drawMeter() {
+    const w = meter.width, h = meter.height;
+    mx.clearRect(0, 0, w, h);
+    /* scale arc */
+    const cxp = w / 2, cyp = h * 1.32, r = h * 1.05;
+    mx.strokeStyle = '#2b332e'; mx.lineWidth = 1;
+    mx.beginPath(); mx.arc(cxp, cyp, r, -2.25, -0.9); mx.stroke();
+    for (let i = 0; i <= 8; i++) {
+      const a = -2.25 + (i / 8) * 1.35;
+      mx.strokeStyle = i > 6 ? 'rgba(217,109,90,.8)' : 'rgba(154,163,156,.5)';
+      mx.lineWidth = i % 2 === 0 ? 1.6 : 1;
+      mx.beginPath();
+      mx.moveTo(cxp + Math.cos(a) * (r - 4), cyp + Math.sin(a) * (r - 4));
+      mx.lineTo(cxp + Math.cos(a) * (r + 3), cyp + Math.sin(a) * (r + 3));
+      mx.stroke();
+    }
+    needle = LP.lerp(needle, LP.audio.smeter, 0.14);
+    const a = -2.25 + LP.clamp(needle, 0, 1) * 1.35;
+    mx.strokeStyle = '#d9a441'; mx.lineWidth = 1.6;
+    mx.beginPath();
+    mx.moveTo(cxp, cyp);
+    mx.lineTo(cxp + Math.cos(a) * (r + 1), cyp + Math.sin(a) * (r + 1));
+    mx.stroke();
+    mx.fillStyle = '#0d100e';
+    mx.beginPath(); mx.arc(cxp, cyp, 8, 0, LP.TAU); mx.fill();
+  }
+
+  /* ---------- readout ---------- */
+  let lastShown = '';
+  function readout() {
+    const v = LP.rx.vfo;
+    const s = `${Math.floor(v / 1000)} ${String(Math.floor(v % 1000)).padStart(3, '0')}.${Math.floor((v * 10) % 10)}`;
+    if (s !== lastShown) {
+      lastShown = s;
+      freqEl.innerHTML = `${s} <span class="khz">kHz</span>`;
+    }
+    freqEl.classList.toggle('locked', !!LP.log.lockedOn);
+  }
+
+  /* ---------- sizing ---------- */
+  function resize() {
+    const r = cv.getBoundingClientRect();
+    if (!r.width) return;
+    const px = LP.DPR();
+    cv.width = Math.round(r.width * px);
+    cv.height = Math.round(r.height * px);
+    const mr = meter.getBoundingClientRect();
+    meter.width = Math.round(mr.width * px);
+    meter.height = Math.round(mr.height * px);
+    LP.ticker.kick();
+  }
+  addEventListener('resize', () => { clearTimeout(LP._rzT); LP._rzT = setTimeout(resize, 120); });
+
+  /* ---------- the master loop ---------- */
+  function loop(dt) {
+    if (!cv.width) { resize(); if (!cv.width) return; }
+    const t = Date.now();
+    const dwell = performance.now() - LP.rx.dwellT0;
+
+    /* the ghost stalks quiet frequencies */
+    const nearStation = LP.band.stations.some(s => s.band === LP.rx.band && Math.abs(s.f - LP.rx.vfo) < 3 && LP.band.strength(s, t) > 0.05 && (s.type !== 'night' || s.isOn()));
+    LP.band.ghost.tune(LP.rx.vfo, dwell, nearStation);
+
+    const rowEvery = LP.rm.matches ? 500 : 33;
+    if (t - lastRow > rowEvery) { lastRow = t; pushRow(t); }
+    if (t - lastRibbon > 500) { lastRibbon = t; ribbon(t); }
+
+    LP.audio.update(t);
+    if (LP.sstv) LP.sstv.update(t);
+    if (LP.log) LP.log.check(t);
+
+    draw(t);
+    drawMeter();
+    readout();
+  }
+
+  function boot() {
+    resize();
+    LP.ticker.add(loop);
+  }
+
+  return { boot, resize, frame: loop, WIN };
+})();
+
+
+/* THE LISTENING POST — POSTCARD. An SSTV station: every six minutes it
+   transmits a new procedurally-drawn postcard, thirty-two lines at a time.
+   Tune it well and the picture develops clean; tune it badly and the lines
+   come in skewed and snowy — exactly like the real thing.
+
+   The audio engine reads lumaAt() so the whistle you hear IS the pixel
+   brightness being painted. */
+LP.sstv = (() => {
+  const W = 320, H = 240;
+  const panel = document.getElementById('develop');
+  const cv = document.getElementById('sstv');
+  const cx = cv.getContext('2d');
+  const idEl = document.getElementById('sstv-id');
+  const pctEl = document.getElementById('sstv-pct');
+
+  const src = document.createElement('canvas');
+  src.width = W; src.height = H;
+  const sx = src.getContext('2d');
+  let luma = null, cycleIx = -1, painted = 0, lastSeen = 0;
+
+  /* ---------- the postcards ---------- */
+  function generate(seed) {
+    const rnd = LP.mulberry(seed);
+    const motif = seed % 3;
+    /* night sky */
+    const g = sx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#0a1226'); g.addColorStop(.62, '#1a2340'); g.addColorStop(1, '#2c3055');
+    sx.fillStyle = g; sx.fillRect(0, 0, W, H);
+    sx.fillStyle = '#e8e6da';
+    for (let i = 0; i < 130; i++) {
+      const y = rnd() * H * 0.62;
+      sx.globalAlpha = 0.3 + rnd() * 0.7;
+      sx.fillRect(rnd() * W, y, rnd() < 0.08 ? 2 : 1, 1);
+    }
+    sx.globalAlpha = 1;
+
+    if (motif === 0) {
+      /* the dunes: a big moon, ridgelines, one saguaro */
+      const mx = 60 + rnd() * 200, my = 40 + rnd() * 50;
+      const mg = sx.createRadialGradient(mx - 6, my - 6, 2, mx, my, 26);
+      mg.addColorStop(0, '#fdf6dd'); mg.addColorStop(1, '#cfc394');
+      sx.fillStyle = mg;
+      sx.beginPath(); sx.arc(mx, my, 24, 0, LP.TAU); sx.fill();
+      for (let ridge = 0; ridge < 3; ridge++) {
+        const base = H * (0.62 + ridge * 0.13);
+        sx.fillStyle = ['#232848', '#181c36', '#0e1024'][ridge];
+        sx.beginPath();
+        sx.moveTo(0, H);
+        for (let x = 0; x <= W; x += 8) {
+          sx.lineTo(x, base + Math.sin(x / 43 + ridge * 2 + seed) * 12 + Math.sin(x / 17 + ridge) * 5);
+        }
+        sx.lineTo(W, H); sx.closePath(); sx.fill();
+      }
+      /* the saguaro stands on the mid ridge */
+      const sxp = 40 + rnd() * 240, syp = H * 0.74;
+      sx.strokeStyle = '#0a0c1c'; sx.lineWidth = 7; sx.lineCap = 'round';
+      sx.beginPath(); sx.moveTo(sxp, syp); sx.lineTo(sxp, syp - 46); sx.stroke();
+      sx.lineWidth = 5;
+      sx.beginPath(); sx.moveTo(sxp - 1, syp - 26); sx.lineTo(sxp - 14, syp - 30); sx.lineTo(sxp - 14, syp - 44); sx.stroke();
+      sx.beginPath(); sx.moveTo(sxp + 1, syp - 18); sx.lineTo(sxp + 13, syp - 24); sx.lineTo(sxp + 13, syp - 38); sx.stroke();
+    } else if (motif === 1) {
+      /* the derelict: a dead ship over the horizon — the registry beacon still blinks */
+      const y0 = 70 + rnd() * 40;
+      sx.fillStyle = '#05070f';
+      sx.beginPath();
+      sx.moveTo(48, y0 + 14);
+      sx.lineTo(96, y0 - 2); sx.lineTo(210, y0 - 6); sx.lineTo(262, y0 + 4);
+      sx.lineTo(268, y0 + 16); sx.lineTo(210, y0 + 26); sx.lineTo(88, y0 + 28);
+      sx.closePath(); sx.fill();
+      sx.fillRect(150, y0 - 18, 5, 16); /* the snapped mast */
+      sx.fillStyle = '#d9a441';
+      sx.fillRect(151, y0 - 22, 3, 3);  /* the beacon */
+      sx.fillStyle = '#7c8fd0'; sx.globalAlpha = .8;
+      sx.fillRect(118, y0 + 6, 3, 3);   /* one lit window */
+      sx.globalAlpha = 1;
+      /* sea of dunes below */
+      sx.fillStyle = '#10142a';
+      sx.beginPath(); sx.moveTo(0, H);
+      for (let x = 0; x <= W; x += 8) sx.lineTo(x, H * 0.8 + Math.sin(x / 37 + seed) * 9);
+      sx.lineTo(W, H); sx.closePath(); sx.fill();
+    } else {
+      /* the mast: a listening post of our own, guyed wires, red lamp */
+      sx.fillStyle = '#10142a';
+      sx.beginPath(); sx.moveTo(0, H);
+      for (let x = 0; x <= W; x += 8) sx.lineTo(x, H * 0.78 + Math.sin(x / 53 + seed) * 7);
+      sx.lineTo(W, H); sx.closePath(); sx.fill();
+      const bx = 90 + rnd() * 140, by = H * 0.8;
+      sx.strokeStyle = '#0a0c1c'; sx.lineWidth = 3;
+      sx.beginPath(); sx.moveTo(bx, by); sx.lineTo(bx, 46); sx.stroke();
+      sx.lineWidth = 1;
+      for (const [dx, dy] of [[-58, 0], [52, 6], [-40, 10], [36, 14]]) {
+        sx.beginPath(); sx.moveTo(bx, 60 + dy * 3); sx.lineTo(bx + dx, by + 2); sx.stroke();
+      }
+      sx.fillStyle = '#d96d5a';
+      sx.beginPath(); sx.arc(bx, 44, 3, 0, LP.TAU); sx.fill();
+      sx.fillStyle = 'rgba(217,109,90,.28)';
+      sx.beginPath(); sx.arc(bx, 44, 9, 0, LP.TAU); sx.fill();
+    }
+    /* caption strip, like a wish-you-were-here card */
+    sx.fillStyle = 'rgba(232,230,218,.92)';
+    sx.fillRect(0, H - 18, W, 18);
+    sx.fillStyle = '#20242c';
+    sx.font = '10px Georgia, serif';
+    sx.textAlign = 'center';
+    sx.fillText(['THE DUNES, AFTER MIDNIGHT', 'SHE IS STILL UP THERE', 'WE ARE STILL LISTENING'][motif], W / 2, H - 6);
+
+    /* luma table for the audio */
+    const img = sx.getImageData(0, 0, W, H).data;
+    luma = new Uint8Array(W * H);
+    for (let i = 0; i < W * H; i++) {
+      luma[i] = (img[i * 4] * 0.3 + img[i * 4 + 1] * 0.55 + img[i * 4 + 2] * 0.15);
+    }
+  }
+
+  function lumaAt(prog) {
+    if (!luma) return 0.4;
+    const line = Math.min(H - 1, Math.floor(prog * H));
+    const x = Math.min(W - 1, Math.floor((prog * H % 1) * W));
+    return luma[line * W + x] / 255;
+  }
+
+  /* ---------- the develop panel ---------- */
+  function update(t) {
+    const st = LP.band.stations.find(s => s.type === 'sstv');
+    const off = LP.rx.vfo - st.f;
+    const tuned = LP.rx.band === st.band && Math.abs(off) < 3.2;
+    const prog = st.prog(t);
+    const ix = Math.floor(t / st.PERIOD);
+
+    if (ix !== cycleIx) {
+      cycleIx = ix;
+      generate(ix);
+      painted = 0;
+      cx.fillStyle = '#060a08';
+      cx.fillRect(0, 0, W, H);
+    }
+    if (tuned && prog >= 0) {
+      lastSeen = t;
+      const target = Math.floor(prog * H);
+      const quality = LP.band.strength(st, t) * Math.exp(-(off * off) / 2.2);
+      while (painted < target) {
+        const y = painted;
+        /* a badly tuned line comes in skewed and snowy */
+        const skew = Math.round(off * 6 + (1 - quality) * (Math.random() * 8 - 4));
+        cx.drawImage(src, 0, y, W, 1, skew, y, W, 1);
+        if (quality < 0.75) {
+          cx.globalAlpha = (0.75 - quality) * 0.9;
+          cx.fillStyle = '#0a0f0c';
+          for (let n = 0; n < 14; n++) cx.fillRect(Math.random() * W, y, 2 + Math.random() * 9, 1);
+          cx.globalAlpha = 1;
+        }
+        painted++;
+      }
+      /* the live scan line glows */
+      cx.fillStyle = 'rgba(111,221,139,.8)';
+      cx.fillRect(0, Math.min(H - 1, target), W, 1);
+      pctEl.textContent = `${Math.floor(prog * 100)}%`;
+      idEl.textContent = 'POSTCARD · 9430';
+    } else if (tuned && prog < 0) {
+      idEl.textContent = 'POSTCARD · IDENT';
+      pctEl.textContent = '';
+      lastSeen = t;
+    }
+    const open = t - lastSeen < 9000 && painted > 0;
+    panel.classList.toggle('open', open || (tuned && prog >= 0));
+  }
+
+  return { update, lumaAt };
+})();
+
+
+/* THE LISTENING POST — the operator's hands. Drag the glass or the dial,
+   roll the wheel for fine work, or never touch the pointer at all:
+   arrows tune, 1/2/3 change bands, L opens the log. */
+(() => {
+  const dial = document.getElementById('dial');
+  const glass = document.getElementById('waterfall');
+  const bands = [0, 1, 2].map(i => document.getElementById('band-' + i));
+  const logBtn = document.getElementById('log-toggle');
+
+  const anyGesture = () => { LP.audio.arm(); LP.ticker.kick(); };
+  addEventListener('pointerdown', anyGesture, { capture: true });
+  addEventListener('pointerup', anyGesture, { capture: true });
+  addEventListener('keydown', anyGesture, { capture: true });
+
+  const saved = LP.store.get('rx', null);
+  const lastVfo = [3303.0, 6779.0, 9425.0];
+  if (saved && typeof saved.band === 'number') {
+    LP.rx.band = LP.clamp(saved.band, 0, 2);
+    if (Array.isArray(saved.lastVfo)) for (let i = 0; i < 3; i++) lastVfo[i] = saved.lastVfo[i] || lastVfo[i];
+    LP.rx.vfo = lastVfo[LP.rx.band];
+    reflectBand();
+  }
+
+  function persist() {
+    lastVfo[LP.rx.band] = LP.rx.vfo;
+    LP.store.set('rx', { band: LP.rx.band, lastVfo });
+  }
+
+  function tuneTo(f, coarse) {
+    const B = LP.band.BANDS[LP.rx.band];
+    LP.rx.vfo = LP.clamp(Math.round(f * 10) / 10, B.lo, B.hi);
+    LP.rx.dwellT0 = performance.now();
+    dial.setAttribute('aria-valuenow', String(Math.round(LP.rx.vfo - B.lo)));
+    dial.setAttribute('aria-valuetext', `${LP.rx.vfo.toFixed(1)} kilohertz`);
+    LP.ticker.kick();
+    clearTimeout(LP._tuneSayT);
+    if (!coarse) LP._tuneSayT = setTimeout(() => LP.say(`${LP.rx.vfo.toFixed(1)} kilohertz`), 700);
+    clearTimeout(LP._persistT);
+    LP._persistT = setTimeout(persist, 800);
+  }
+  LP.tuneTo = tuneTo;
+
+  function setBand(ix) {
+    if (ix === LP.rx.band) return;
+    lastVfo[LP.rx.band] = LP.rx.vfo;
+    LP.rx.band = ix;
+    reflectBand();
+    tuneTo(lastVfo[ix], true);
+    LP.say(`Band ${LP.band.BANDS[ix].name.toLowerCase()}, ${LP.rx.vfo.toFixed(1)} kilohertz.`);
+    persist();
+  }
+  function reflectBand() {
+    bands.forEach((b, i) => b.setAttribute('aria-pressed', String(i === LP.rx.band)));
+  }
+  bands.forEach((b, i) => b.addEventListener('click', () => setBand(i)));
+
+  /* ---------- the dial strip ---------- */
+  let dialDrag = null;
+  dial.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    dial.setPointerCapture(e.pointerId);
+    dialDrag = { x: e.clientX, vfo: LP.rx.vfo };
+    dial.focus();
+  });
+  dial.addEventListener('pointermove', (e) => {
+    if (!dialDrag) return;
+    const dx = e.clientX - dialDrag.x;
+    tuneTo(dialDrag.vfo + dx * 0.12, true);
+  });
+  const dialUp = () => { dialDrag = null; };
+  dial.addEventListener('pointerup', dialUp);
+  dial.addEventListener('pointercancel', dialUp);
+  dial.addEventListener('lostpointercapture', dialUp);
+
+  dial.addEventListener('keydown', (e) => {
+    const B = LP.band.BANDS[LP.rx.band];
+    switch (e.key) {
+      case 'ArrowLeft': tuneTo(LP.rx.vfo - 0.1); break;
+      case 'ArrowRight': tuneTo(LP.rx.vfo + 0.1); break;
+      case 'ArrowDown': tuneTo(LP.rx.vfo - 1); break;
+      case 'ArrowUp': tuneTo(LP.rx.vfo + 1); break;
+      case 'PageDown': tuneTo(LP.rx.vfo - 5); break;
+      case 'PageUp': tuneTo(LP.rx.vfo + 5); break;
+      case 'Home': tuneTo(B.lo); break;
+      case 'End': tuneTo(B.hi); break;
+      default: return;
+    }
+    e.preventDefault();
+  });
+
+  /* ---------- the glass: grab the spectrum itself ---------- */
+  let glassDrag = null;
+  glass.addEventListener('pointerdown', (e) => {
+    const r = glass.getBoundingClientRect();
+    const yFrac = (e.clientY - r.top) / r.height;
+    if (yFrac < 0.08) {
+      /* the ribbon: jump straight there */
+      const B = LP.band.BANDS[LP.rx.band];
+      tuneTo(B.lo + (e.clientX - r.left) / r.width * (B.hi - B.lo), true);
+      return;
+    }
+    e.preventDefault();
+    glass.setPointerCapture(e.pointerId);
+    glassDrag = { x: e.clientX, vfo: LP.rx.vfo, w: r.width };
+  });
+  glass.addEventListener('pointermove', (e) => {
+    if (!glassDrag) return;
+    const dx = e.clientX - glassDrag.x;
+    tuneTo(glassDrag.vfo - dx * (LP.display.WIN / glassDrag.w), true);
+  });
+  const glassUp = () => { glassDrag = null; };
+  glass.addEventListener('pointerup', glassUp);
+  glass.addEventListener('pointercancel', glassUp);
+
+  /* fine tuning: the wheel, anywhere over the rig */
+  for (const el of [glass, dial]) {
+    el.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const step = e.shiftKey ? 1 : 0.1;
+      tuneTo(LP.rx.vfo + (e.deltaY > 0 ? -step : step));
+    }, { passive: false });
+  }
+
+  /* ---------- logbook ---------- */
+  function toggleLog(force) {
+    const book = document.getElementById('logbook');
+    const open = force !== undefined ? force : book.hidden;
+    book.hidden = !open;
+    requestAnimationFrame(() => book.classList.toggle('open', open));
+    logBtn.setAttribute('aria-pressed', String(open));
+    if (open) LP.log.render();
+  }
+  logBtn.addEventListener('click', () => toggleLog());
+  LP.toggleLog = toggleLog;
+
+  /* ---------- bare keys ---------- */
+  addEventListener('keydown', (e) => {
+    if (e.target instanceof HTMLElement && ['BUTTON', 'INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
+    if (e.target === dial) return; /* the dial has its own map */
+    switch (e.key) {
+      case 'ArrowLeft': tuneTo(LP.rx.vfo - 0.1); break;
+      case 'ArrowRight': tuneTo(LP.rx.vfo + 0.1); break;
+      case 'ArrowDown': tuneTo(LP.rx.vfo - 1); break;
+      case 'ArrowUp': tuneTo(LP.rx.vfo + 1); break;
+      case '1': setBand(0); break;
+      case '2': setBand(1); break;
+      case '3': setBand(2); break;
+      case 'l': case 'L': toggleLog(); break;
+      default: return;
+    }
+    e.preventDefault();
+  });
+})();
+
+
+/* THE LISTENING POST — the station log. Hold a signal and it gets pencilled
+   in; the book survives the night. Log enough of the band and, once, every
+   station keys the same three characters at the same moment — the net
+   acknowledging a new listener. */
+LP.log = (() => {
+  const entries = LP.store.get('log', []);
+  const list = document.getElementById('log-list');
+  const seen = new Set(entries.map(e => e.id));
+  let netDone = LP.store.get('net', false);
+  let lockedOn = null, lockT0 = 0, lastActive = 0;
+
+  function has(id) { return seen.has(id); }
+
+  function add(id, f, note, cls) {
+    if (seen.has(id)) return;
+    seen.add(id);
+    const d = new Date();
+    entries.push({ id, f, note, at: `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`, cls: cls || '' });
+    LP.store.set('log', entries);
+    LP.say(`Logged: ${id}, ${f ? f.toFixed(1) + ' kilohertz' : 'frequency unknown'}.`);
+    render();
+    maybeNet();
+  }
+
+  function render() {
+    if (!list) return;
+    list.textContent = '';
+    if (!entries.length) {
+      const li = document.createElement('li');
+      li.className = 'empty';
+      li.textContent = 'nothing pencilled in yet — hold a signal';
+      list.appendChild(li);
+      return;
+    }
+    for (const e of entries) {
+      const li = document.createElement('li');
+      if (e.cls) li.className = e.cls;
+      const id = document.createElement('span'); id.className = 'id'; id.textContent = e.id;
+      const f = document.createElement('span'); f.className = 'f'; f.textContent = e.f ? `${e.f.toFixed(1)} · ${e.at}` : e.at;
+      const note = document.createElement('span'); note.className = 'note'; note.textContent = e.note;
+      li.append(id, f, note);
+      list.appendChild(li);
+    }
+  }
+
+  /* the net: seven names in the book and the band answers, once */
+  function maybeNet() {
+    if (netDone) return;
+    const core = entries.filter(e => e.id !== 'ALL STATIONS').length;
+    if (core >= 7) {
+      netDone = true;
+      LP.store.set('net', true);
+      LP.band.net.until = Date.now() + 26000;
+      setTimeout(() => {
+        add('ALL STATIONS', 0, 'the net acknowledged you', 'net');
+      }, 9000);
+    }
+  }
+
+  /* lock detection: near a station's carrier, signal present, held ~4s */
+  function check(t) {
+    let candidate = null;
+    for (const st of LP.band.stations) {
+      if (st.band !== LP.rx.band) continue;
+      if (st.type === 'night' && !st.isOn()) continue;
+      const off = Math.abs(LP.rx.vfo - st.f);
+      if (off < Math.max(st.bw * 0.9, 0.4)) { candidate = st; break; }
+    }
+    if (candidate && candidate.activity(t) > 0.05) lastActive = t;
+    if (candidate && (candidate.id === (lockedOn && lockedOn.id))) {
+      if (t - lockT0 > 4200 && t - lastActive < 3000) add(candidate.id, candidate.f, candidate.note);
+    } else {
+      lockedOn = candidate;
+      lockT0 = t;
+    }
+
+    /* the ghost is logged the moment it asks its question at your ear */
+    const gh = LP.band.ghost;
+    if (gh.state === 'asking' && Math.abs(LP.rx.vfo - gh.f) < 0.4) {
+      add('THE OTHER', gh.f, 'it asked who was there', 'net');
+      gh.heard = true;
+    }
+    LP.log.lockedOn = candidate ? candidate.id : null;
+  }
+
+  render();
+  return { has, add, check, render, get lockedOn() { return lockedOn && lockedOn.id; }, set lockedOn(v) { }, entries };
+})();
+
+
+/* THE LISTENING POST — arrival. The glass is already alive when you walk
+   in; the chassis lights come up around it. */
+(() => {
+  try {
+    if (!LP.rm.matches) document.body.classList.add('arriving');
+
+    LP.display.boot();
+
+    /* the engine is alive: hand the controls over */
+    document.querySelectorAll('button[disabled]').forEach(b => { b.disabled = false; });
+
+    if (!LP.rm.matches) {
+      setTimeout(() => document.body.classList.remove('arriving'), 900);
+    }
+
+    setTimeout(() => {
+      LP.say(`A shortwave receiver, three bands. Arrow keys tune; 1, 2, 3 change band; L opens the station log. Currently ${LP.rx.vfo.toFixed(1)} kilohertz.`);
+    }, 1400);
+  } catch (err) {
+    console.error(err);
+    const p = document.createElement('p');
+    p.style.cssText = 'position:fixed;inset:auto 0 40px 0;text-align:center;color:#9aa39c;font:15px Georgia,serif;letter-spacing:.14em;';
+    p.textContent = 'The receiver failed to start. A shortwave set lives here — try a newer browser.';
+    document.body.appendChild(p);
+  }
+})();
+
+</script>
+</body>
+</html>

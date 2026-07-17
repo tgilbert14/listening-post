@@ -1,0 +1,269 @@
+/* THE LISTENING POST — audio. Zero audio files. The same band model the
+   waterfall paints is rendered here as sound: CW beats against the BFO so
+   pitch follows your tuning error, the buzzer rasps, the RTTY diddles,
+   AURORA plays actual music through 2,000 miles of ionosphere, and the
+   ghost is a heterodyne whistle falling toward zero-beat.
+
+   THE LAW: no sound before an activation-bearing gesture; the chip never
+   claims ON until the context runs; opt-out is remembered; hidden tabs
+   are silent. */
+LP.audio = (() => {
+  let ctx = null, master = null, noiseGain = null, crashGain = null;
+  let enabled = LP.store.get('sound', true);
+  const chip = document.getElementById('sound-toggle');
+  const voices = new Map();   /* station id -> voice */
+  let smeter = 0;             /* 0..1, for the needle */
+
+  function build() {
+    if (ctx) return;
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -20; comp.knee.value = 22; comp.ratio.value = 5;
+    master = ctx.createGain();
+    master.gain.value = 0.85;
+    master.connect(comp).connect(ctx.destination);
+
+    /* the noise floor: band hiss, shaped */
+    const len = ctx.sampleRate * 2;
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    const noise = ctx.createBufferSource();
+    noise.buffer = buf; noise.loop = true;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.frequency.value = 1100; bp.Q.value = 0.5;
+    noiseGain = ctx.createGain();
+    noiseGain.gain.value = 0.05;
+    noise.connect(bp).connect(noiseGain).connect(master);
+    noise.start();
+
+    /* lightning crashes ride a separate wideband path */
+    const nz2 = ctx.createBufferSource();
+    nz2.buffer = buf; nz2.loop = true; nz2.playbackRate.value = 0.7;
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass'; hp.frequency.value = 300;
+    crashGain = ctx.createGain(); crashGain.gain.value = 0;
+    nz2.connect(hp).connect(crashGain).connect(master);
+    nz2.start();
+
+    document.addEventListener('visibilitychange', () => {
+      if (!ctx) return;
+      if (document.hidden) ctx.suspend();
+      else if (enabled) ctx.resume().then(reflect).catch(reflect);
+    });
+    ctx.onstatechange = reflect;
+  }
+
+  function reflect() {
+    const on = !!(ctx && ctx.state === 'running' && enabled);
+    if (chip) chip.setAttribute('aria-pressed', String(on));
+  }
+  function arm() {
+    if (!enabled) return;
+    build();
+    if (ctx.state !== 'running') ctx.resume().then(reflect).catch(reflect);
+    else reflect();
+  }
+  function toggle() {
+    enabled = !enabled;
+    LP.store.set('sound', enabled);
+    if (enabled) { build(); ctx.resume().then(reflect).catch(reflect); LP.say('Sound on.'); }
+    else { if (ctx) ctx.suspend(); reflect(); LP.say('Sound off.'); }
+  }
+  if (chip) chip.addEventListener('click', toggle);
+
+  const audible = () => ctx && ctx.state === 'running' && enabled;
+
+  /* ---------- voices ---------- */
+  function mkVoice(st) {
+    const g = ctx.createGain(); g.gain.value = 0;
+    g.connect(master);
+    const v = { g, st, nodes: [] };
+    const osc = (type, freq) => {
+      const o = ctx.createOscillator();
+      o.type = type; o.frequency.value = freq;
+      o.start();
+      v.nodes.push(o);
+      return o;
+    };
+
+    if (st.type === 'beacon' || st.type === 'ghostcw') {
+      v.o = osc('sine', 600);
+      v.o.connect(g);
+    } else if (st.type === 'buzzer') {
+      v.o = osc('sawtooth', 238);
+      const f = ctx.createBiquadFilter();
+      f.type = 'bandpass'; f.frequency.value = 640; f.Q.value = 1.6;
+      v.o.connect(f).connect(g);
+      v.digit = osc('sine', 500);
+      v.digitG = ctx.createGain(); v.digitG.gain.value = 0;
+      v.digit.connect(v.digitG).connect(g);
+    } else if (st.type === 'rtty') {
+      v.o = osc('sine', 935);
+      const lfo = osc('square', st.baud / 2);
+      const dep = ctx.createGain(); dep.gain.value = 85;
+      lfo.connect(dep).connect(v.o.frequency);
+      v.o.connect(g);
+    } else if (st.type === 'night') {
+      v.o = osc('sine', 220);
+      const echoIn = ctx.createGain();
+      const dl = ctx.createDelay(1.2); dl.delayTime.value = 0.62;
+      const fb = ctx.createGain(); fb.gain.value = 0.42;
+      v.toneG = ctx.createGain(); v.toneG.gain.value = 0;
+      v.o.connect(v.toneG).connect(echoIn);
+      echoIn.connect(g);
+      echoIn.connect(dl); dl.connect(fb); fb.connect(dl); dl.connect(g);
+      v.lastTone = -1;
+    } else if (st.type === 'sstv') {
+      v.o = osc('sine', 1500);
+      const sg = ctx.createGain(); sg.gain.value = 0.55;
+      v.o.connect(sg).connect(g);
+    } else if (st.type === 'music') {
+      /* AURORA's little orchestra: lead + bass through a warm lowpass + echo */
+      v.bus = ctx.createGain(); v.bus.gain.value = 0.9;
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass'; lp.frequency.value = 2100; lp.Q.value = 0.4;
+      const dl = ctx.createDelay(1); dl.delayTime.value = 0.34;
+      const fb = ctx.createGain(); fb.gain.value = 0.35;
+      v.bus.connect(lp).connect(g);
+      lp.connect(dl); dl.connect(fb); fb.connect(dl); dl.connect(g);
+      v.nextNote = 0; v.step = 0;
+      v.scale = [0, 3, 5, 7, 10, 12, 15];
+      v.rng = LP.mulberry(20260716 + new Date().getDate());
+    }
+    return v;
+  }
+
+  function killVoice(v) {
+    for (const n of v.nodes) { try { n.stop(); } catch { } }
+    try { v.g.disconnect(); } catch { }
+  }
+
+  /* per-frame render: called by the display loop with wall time */
+  function update(t) {
+    if (!ctx) return;
+    smeter = 0;
+    if (!audible()) return;
+    const rx = LP.rx;
+    const B = LP.band.BANDS[rx.band];
+    const now = ctx.currentTime;
+    const K = 0.012; /* keying time-constant */
+
+    /* which stations are within earshot (±5 kHz) */
+    const near = new Set();
+    for (const st of LP.band.stations) {
+      if (st.band !== rx.band) continue;
+      const off = rx.vfo - st.f;
+      if (Math.abs(off) > 5) continue;
+      near.add(st.id);
+      let v = voices.get(st.id);
+      if (!v) { v = mkVoice(st); voices.set(st.id, v); }
+      const act = st.activity(t);
+      const str = LP.band.strength(st, t);
+      /* selectivity: how much of it lands in the passband */
+      const sel = Math.exp(-(off * off) / (2 * Math.pow(Math.max(st.bw, 0.35) * 0.9, 2)));
+      let vol = act * str * sel;
+      smeter = Math.max(smeter, str * sel * (0.4 + 0.6 * act));
+
+      if (st.type === 'beacon') {
+        /* CW against the BFO: pitch IS your tuning error */
+        const pitch = LP.clamp(300 + Math.abs(off) * 700 + (st.pitchBias || 0), 220, 1900);
+        v.o.frequency.setTargetAtTime(pitch, now, 0.03);
+        v.g.gain.setTargetAtTime(vol * 0.30, now, K);
+      } else if (st.type === 'buzzer') {
+        const p = st.phase(t);
+        v.g.gain.setTargetAtTime((p.on && p.mode === 'buzz' ? 1 : 0.06) * str * sel * 0.26, now, K);
+        if (p.mode === 'digit' && p.on) {
+          v.digit.frequency.setTargetAtTime(430 + p.digit * 74, now, 0.01);
+          v.digitG.gain.setTargetAtTime(0.5, now, K);
+        } else {
+          v.digitG.gain.setTargetAtTime(0, now, K);
+        }
+      } else if (st.type === 'rtty') {
+        v.g.gain.setTargetAtTime(vol * 0.16, now, K);
+      } else if (st.type === 'night') {
+        v.g.gain.setTargetAtTime(str * sel * 0.5, now, 0.05);
+        const ix = st.toneIx(t);
+        if (ix >= 0 && ix !== v.lastTone && st.activity(t) > 0) {
+          v.lastTone = ix;
+          /* eleven tones: a slow minor climb that resolves */
+          const semis = [0, 3, 5, 7, 10, 12, 15, 17, 19, 22, 24][ix];
+          v.o.frequency.setValueAtTime(164.81 * Math.pow(2, semis / 12), now);
+          v.toneG.gain.cancelScheduledValues(now);
+          v.toneG.gain.setValueAtTime(0.0001, now);
+          v.toneG.gain.exponentialRampToValueAtTime(0.5, now + 0.06);
+          v.toneG.gain.exponentialRampToValueAtTime(0.0001, now + 1.35);
+        }
+        if (ix === -1) v.lastTone = -1;
+      } else if (st.type === 'sstv') {
+        const prog = st.prog(t);
+        if (prog >= 0 && LP.sstv) {
+          v.o.frequency.setTargetAtTime(1200 + LP.sstv.lumaAt(prog) * 1100, now, 0.008);
+          v.g.gain.setTargetAtTime(vol * 0.14, now, K);
+        } else {
+          /* the CW ident between pictures */
+          v.o.frequency.setTargetAtTime(740, now, 0.02);
+          v.g.gain.setTargetAtTime(st.activity(t) * str * sel * 0.2, now, K);
+        }
+      } else if (st.type === 'music') {
+        v.g.gain.setTargetAtTime(vol * 0.5, now, 0.05);
+        /* schedule the little tune ahead of time */
+        while (v.nextNote < now + 0.25) {
+          const when = Math.max(v.nextNote, now + 0.02);
+          const beat = 0.32;
+          const deg = v.scale[Math.floor(v.rng() * v.scale.length)];
+          if (v.step % 4 === 0) note(v.bus, 110 * Math.pow(2, (v.step % 8 === 0 ? 0 : 7) / 12), when, beat * 3.4, 'triangle', 0.16);
+          if (v.rng() < 0.82) note(v.bus, 440 * Math.pow(2, deg / 12), when, beat * (v.rng() < 0.3 ? 1.9 : 0.95), 'sine', 0.14);
+          v.nextNote = when + beat;
+          v.step++;
+        }
+      }
+    }
+
+    /* the ghost: a carrier with no name */
+    const gh = LP.band.ghost;
+    if (gh.state !== 'asleep' && gh.state !== 'gone') {
+      near.add('THE OTHER');
+      let v = voices.get('THE OTHER');
+      if (!v) { v = mkVoice({ type: 'ghostcw', id: 'THE OTHER' }); voices.set('THE OTHER', v); }
+      const off = Math.abs(LP.rx.vfo - gh.f);
+      if (gh.state === 'asking') {
+        v.o.frequency.setTargetAtTime(478, now, 0.02);
+        v.g.gain.setTargetAtTime(gh.activity(t) * 0.24, now, K);
+      } else {
+        /* heterodyne: the whistle falls as it closes on you */
+        const beat = LP.clamp(off * 1000, 24, 2400);
+        v.o.frequency.setTargetAtTime(beat, now, 0.03);
+        v.g.gain.setTargetAtTime(gh.strength() * 0.2 * Math.exp(-off * off / 4), now, 0.05);
+      }
+      smeter = Math.max(smeter, gh.strength() * 0.8);
+    }
+
+    /* silence + release voices that drifted out of earshot */
+    for (const [id, v] of voices) {
+      if (!near.has(id)) {
+        v.g.gain.setTargetAtTime(0, now, 0.05);
+        if (!v._dieAt) v._dieAt = t + 1200;
+        else if (t > v._dieAt) { killVoice(v); voices.delete(id); }
+      } else v._dieAt = 0;
+    }
+
+    /* noise floor swells when nothing is tuned; crashes follow the sky */
+    noiseGain.gain.setTargetAtTime(0.028 + 0.05 * (1 - Math.min(1, smeter * 1.6)), now, 0.2);
+    const sf = LP.band.sferic;
+    crashGain.gain.setTargetAtTime(t < sf.until ? sf.level * 0.16 : 0, now, 0.02);
+  }
+
+  function note(bus, freq, when, dur, type, amp) {
+    const o = ctx.createOscillator();
+    o.type = type; o.frequency.value = freq;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, when);
+    g.gain.exponentialRampToValueAtTime(amp, when + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+    o.connect(g).connect(bus);
+    o.start(when); o.stop(when + dur + 0.1);
+  }
+
+  return { arm, toggle, update, reflect, get smeter() { return smeter; }, get enabled() { return enabled; } };
+})();

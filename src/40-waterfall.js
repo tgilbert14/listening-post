@@ -1,0 +1,223 @@
+/* THE LISTENING POST — the glass. A phosphor waterfall of a 48 kHz window
+   around the VFO, a full-band ribbon above it, a falling-raster history
+   below the scan line. Reduced motion swaps the scroll for a still
+   spectrum graph, redrawn gently.
+
+   This file also owns the master loop: model → audio → glass → meter. */
+LP.display = (() => {
+  const cv = document.getElementById('waterfall');
+  const cx = cv.getContext('2d');
+  const meter = document.getElementById('smeter');
+  const mx = meter.getContext('2d');
+  const freqEl = document.getElementById('freq');
+  const WIN = 48;             /* kHz visible in the waterfall */
+  const COLS = 512;
+  const ROWS = 300;
+
+  /* offscreen raster */
+  const wf = document.createElement('canvas');
+  wf.width = COLS; wf.height = ROWS;
+  const wx = wf.getContext('2d');
+  wx.fillStyle = '#03100a'; wx.fillRect(0, 0, COLS, ROWS);
+
+  /* phosphor LUT */
+  const LUT = new Uint8ClampedArray(256 * 3);
+  for (let i = 0; i < 256; i++) {
+    const x = i / 255;
+    const r = x < .55 ? x * 30 : 30 + (x - .55) * 420;
+    const g = 18 + x * 225;
+    const b = x < .5 ? 14 + x * 60 : 44 + (x - .5) * 140;
+    LUT[i * 3] = x < .04 ? 3 : r;
+    LUT[i * 3 + 1] = x < .04 ? 14 : g;
+    LUT[i * 3 + 2] = x < .04 ? 8 : b;
+  }
+  const rowImg = wx.createImageData(COLS, 1);
+  const rowBuf = new Float32Array(COLS);
+  const ribbonBuf = new Float32Array(COLS);
+  const rng = LP.mulberry(9130);
+
+  let lastRow = 0, lastRibbon = 0, ribbonImg = null;
+
+  function pushRow(t) {
+    const B = LP.band.BANDS[LP.rx.band];
+    const fLo = LP.rx.vfo - WIN / 2, fHi = LP.rx.vfo + WIN / 2;
+    LP.band.spectrumRow(rowBuf, fLo, fHi, t, LP.rx.band, rng);
+    const d = rowImg.data;
+    for (let i = 0; i < COLS; i++) {
+      const v = Math.min(255, Math.floor(rowBuf[i] * 340));
+      d[i * 4] = LUT[v * 3]; d[i * 4 + 1] = LUT[v * 3 + 1]; d[i * 4 + 2] = LUT[v * 3 + 2]; d[i * 4 + 3] = 255;
+    }
+    /* scroll down one, new row on top */
+    wx.drawImage(wf, 0, 0, COLS, ROWS - 1, 0, 1, COLS, ROWS - 1);
+    wx.putImageData(rowImg, 0, 0);
+  }
+
+  function ribbon(t) {
+    /* the whole band at a glance, redrawn at 2 fps */
+    const B = LP.band.BANDS[LP.rx.band];
+    LP.band.spectrumRow(ribbonBuf, B.lo, B.hi, t, LP.rx.band, rng);
+    if (!ribbonImg) ribbonImg = wx.createImageData(COLS, 1);
+    const d = ribbonImg.data;
+    for (let i = 0; i < COLS; i++) {
+      const v = Math.min(255, Math.floor(ribbonBuf[i] * 300));
+      d[i * 4] = LUT[v * 3]; d[i * 4 + 1] = LUT[v * 3 + 1]; d[i * 4 + 2] = LUT[v * 3 + 2]; d[i * 4 + 3] = 255;
+    }
+  }
+
+  function draw(t) {
+    const w = cv.width, h = cv.height;
+    if (!w) return;
+    cx.clearRect(0, 0, w, h);
+    const ribbonH = Math.max(14, h * 0.05);
+    const scaleH = Math.max(18, h * 0.055);
+    const wfY = ribbonH + 6;
+    const wfH = h - wfY - scaleH;
+
+    /* ribbon: full band + logged pencil ticks + the cursor */
+    if (ribbonImg) {
+      const tmp = document.createElement('canvas'); /* cached below after first use */
+      cx.imageSmoothingEnabled = false;
+      if (!draw._rb) { draw._rb = document.createElement('canvas'); draw._rb.width = COLS; draw._rb.height = 1; }
+      draw._rb.getContext('2d').putImageData(ribbonImg, 0, 0);
+      cx.drawImage(draw._rb, 0, 0, COLS, 1, 0, 0, w, ribbonH);
+      cx.imageSmoothingEnabled = true;
+    }
+    const B = LP.band.BANDS[LP.rx.band];
+    for (const st of LP.band.stations) {
+      if (st.band !== LP.rx.band || !LP.log.has(st.id)) continue;
+      const x = (st.f - B.lo) / (B.hi - B.lo) * w;
+      cx.strokeStyle = 'rgba(154,163,156,.8)';
+      cx.lineWidth = 1;
+      cx.beginPath(); cx.moveTo(x - 3, ribbonH + 3); cx.lineTo(x, ribbonH - 2); cx.lineTo(x + 3, ribbonH + 3); cx.stroke();
+    }
+    const cursorX = (LP.rx.vfo - B.lo) / (B.hi - B.lo) * w;
+    cx.fillStyle = 'rgba(217,164,65,.9)';
+    cx.fillRect(cursorX - 1, 0, 2, ribbonH + 4);
+
+    /* waterfall window (or the rm spectrum graph) */
+    if (LP.rm.matches) {
+      /* designed still: the current row as a line graph */
+      cx.strokeStyle = 'rgba(111,221,139,.85)';
+      cx.lineWidth = 1.5;
+      cx.beginPath();
+      for (let i = 0; i < COLS; i++) {
+        const x = i / COLS * w;
+        const y = wfY + wfH - Math.min(1, rowBuf[i] * 1.4) * wfH * 0.92;
+        i === 0 ? cx.moveTo(x, y) : cx.lineTo(x, y);
+      }
+      cx.stroke();
+      cx.strokeStyle = 'rgba(46,92,60,.5)';
+      cx.strokeRect(0.5, wfY + .5, w - 1, wfH - 1);
+    } else {
+      cx.imageSmoothingEnabled = false;
+      cx.drawImage(wf, 0, 0, COLS, ROWS, 0, wfY, w, wfH);
+      cx.imageSmoothingEnabled = true;
+    }
+
+    /* center line: where you are listening */
+    cx.fillStyle = 'rgba(217,164,65,.55)';
+    cx.fillRect(w / 2 - .5, wfY, 1, wfH);
+    cx.fillStyle = 'rgba(217,164,65,.9)';
+    cx.beginPath();
+    cx.moveTo(w / 2 - 5, wfY); cx.lineTo(w / 2 + 5, wfY); cx.lineTo(w / 2, wfY + 7);
+    cx.closePath(); cx.fill();
+
+    /* frequency scale */
+    const fLo = LP.rx.vfo - WIN / 2;
+    cx.font = `${Math.max(9, h * 0.028)}px Consolas, monospace`;
+    cx.textAlign = 'center';
+    const first = Math.ceil(fLo / 5) * 5;
+    for (let f = first; f < fLo + WIN; f += 5) {
+      const x = (f - fLo) / WIN * w;
+      cx.fillStyle = 'rgba(154,163,156,.25)';
+      cx.fillRect(x, wfY + wfH, 1, 5);
+      cx.fillStyle = 'rgba(154,163,156,.55)';
+      cx.fillText(String(f), x, h - 5);
+    }
+  }
+
+  /* ---------- S-meter ---------- */
+  let needle = 0;
+  function drawMeter() {
+    const w = meter.width, h = meter.height;
+    mx.clearRect(0, 0, w, h);
+    /* scale arc */
+    const cxp = w / 2, cyp = h * 1.32, r = h * 1.05;
+    mx.strokeStyle = '#2b332e'; mx.lineWidth = 1;
+    mx.beginPath(); mx.arc(cxp, cyp, r, -2.25, -0.9); mx.stroke();
+    for (let i = 0; i <= 8; i++) {
+      const a = -2.25 + (i / 8) * 1.35;
+      mx.strokeStyle = i > 6 ? 'rgba(217,109,90,.8)' : 'rgba(154,163,156,.5)';
+      mx.lineWidth = i % 2 === 0 ? 1.6 : 1;
+      mx.beginPath();
+      mx.moveTo(cxp + Math.cos(a) * (r - 4), cyp + Math.sin(a) * (r - 4));
+      mx.lineTo(cxp + Math.cos(a) * (r + 3), cyp + Math.sin(a) * (r + 3));
+      mx.stroke();
+    }
+    needle = LP.lerp(needle, LP.audio.smeter, 0.14);
+    const a = -2.25 + LP.clamp(needle, 0, 1) * 1.35;
+    mx.strokeStyle = '#d9a441'; mx.lineWidth = 1.6;
+    mx.beginPath();
+    mx.moveTo(cxp, cyp);
+    mx.lineTo(cxp + Math.cos(a) * (r + 1), cyp + Math.sin(a) * (r + 1));
+    mx.stroke();
+    mx.fillStyle = '#0d100e';
+    mx.beginPath(); mx.arc(cxp, cyp, 8, 0, LP.TAU); mx.fill();
+  }
+
+  /* ---------- readout ---------- */
+  let lastShown = '';
+  function readout() {
+    const v = LP.rx.vfo;
+    const s = `${Math.floor(v / 1000)} ${String(Math.floor(v % 1000)).padStart(3, '0')}.${Math.floor((v * 10) % 10)}`;
+    if (s !== lastShown) {
+      lastShown = s;
+      freqEl.innerHTML = `${s} <span class="khz">kHz</span>`;
+    }
+    freqEl.classList.toggle('locked', !!LP.log.lockedOn);
+  }
+
+  /* ---------- sizing ---------- */
+  function resize() {
+    const r = cv.getBoundingClientRect();
+    if (!r.width) return;
+    const px = LP.DPR();
+    cv.width = Math.round(r.width * px);
+    cv.height = Math.round(r.height * px);
+    const mr = meter.getBoundingClientRect();
+    meter.width = Math.round(mr.width * px);
+    meter.height = Math.round(mr.height * px);
+    LP.ticker.kick();
+  }
+  addEventListener('resize', () => { clearTimeout(LP._rzT); LP._rzT = setTimeout(resize, 120); });
+
+  /* ---------- the master loop ---------- */
+  function loop(dt) {
+    if (!cv.width) { resize(); if (!cv.width) return; }
+    const t = Date.now();
+    const dwell = performance.now() - LP.rx.dwellT0;
+
+    /* the ghost stalks quiet frequencies */
+    const nearStation = LP.band.stations.some(s => s.band === LP.rx.band && Math.abs(s.f - LP.rx.vfo) < 3 && LP.band.strength(s, t) > 0.05 && (s.type !== 'night' || s.isOn()));
+    LP.band.ghost.tune(LP.rx.vfo, dwell, nearStation);
+
+    const rowEvery = LP.rm.matches ? 500 : 33;
+    if (t - lastRow > rowEvery) { lastRow = t; pushRow(t); }
+    if (t - lastRibbon > 500) { lastRibbon = t; ribbon(t); }
+
+    LP.audio.update(t);
+    if (LP.sstv) LP.sstv.update(t);
+    if (LP.log) LP.log.check(t);
+
+    draw(t);
+    drawMeter();
+    readout();
+  }
+
+  function boot() {
+    resize();
+    LP.ticker.add(loop);
+  }
+
+  return { boot, resize, frame: loop, WIN };
+})();

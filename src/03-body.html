@@ -1,0 +1,73 @@
+<a class="sr-only skip" href="#dial">Skip to the dial</a>
+
+<header class="masthead">
+  <p class="eyebrow">Desert Data Labs</p>
+  <h1>The Listening Post</h1>
+  <p class="sub" id="sub-line">The band is open</p>
+</header>
+
+<main class="rig">
+  <div class="glass">
+    <canvas id="waterfall" aria-hidden="true"></canvas>
+  </div>
+
+  <div class="panel">
+    <p class="freq" id="freq" aria-hidden="true">— <span class="khz">kHz</span></p>
+
+    <div id="dial" role="slider" tabindex="0" aria-label="Tuning dial"
+         aria-valuemin="0" aria-valuemax="240" aria-valuenow="120"
+         aria-valuetext="" aria-describedby="sr-status"></div>
+
+    <div class="bands" role="group" aria-label="Bands">
+      <button class="chip band" id="band-0" disabled aria-pressed="true">Ground</button>
+      <button class="chip band" id="band-1" disabled aria-pressed="false">Sky</button>
+      <button class="chip band" id="band-2" disabled aria-pressed="false">High</button>
+    </div>
+
+    <div class="side">
+      <canvas id="smeter" aria-hidden="true"></canvas>
+      <button class="chip" id="log-toggle" disabled aria-pressed="false" aria-controls="logbook">Log</button>
+      <button class="chip" id="sound-toggle" disabled aria-pressed="false">Sound</button>
+    </div>
+  </div>
+
+  <aside class="develop" id="develop" aria-label="Picture decoder">
+    <canvas id="sstv" width="320" height="240"></canvas>
+    <p class="strip"><span id="sstv-id">—</span><span id="sstv-pct"></span></p>
+  </aside>
+
+  <aside class="logbook" id="logbook" aria-label="Station log" hidden>
+    <h2>Station Log</h2>
+    <ol id="log-list"></ol>
+  </aside>
+
+  <p class="sr-only" role="status" aria-live="polite" id="sr-status"></p>
+
+  <noscript>
+    <div class="brochure">
+      <div>
+        <svg viewBox="0 0 420 240" role="img" aria-label="A shortwave receiver: waterfall display, tuning dial, and a signal meter.">
+          <rect x="10" y="10" width="400" height="150" rx="8" fill="#060a08" stroke="#223028" stroke-width="2"/>
+          <g stroke="#6fdd8b" stroke-width="2" opacity=".9">
+            <path d="M60 20 V150" opacity=".55"/>
+            <path d="M118 20 V150" opacity=".3"/>
+            <path d="M210 20 V150" opacity=".8"/>
+            <path d="M300 20 V150" opacity=".4"/>
+            <path d="M352 20 V150" opacity=".6"/>
+          </g>
+          <g fill="#2e5c3c">
+            <rect x="20" y="40" width="380" height="1.6"/>
+            <rect x="20" y="74" width="380" height="1.2"/>
+            <rect x="20" y="112" width="380" height="1.4"/>
+          </g>
+          <rect x="10" y="176" width="400" height="52" rx="8" fill="#181d1b" stroke="#232a26" stroke-width="2"/>
+          <text x="30" y="209" fill="#6fdd8b" font-family="monospace" font-size="24">6 727.0</text>
+          <rect x="160" y="192" width="180" height="20" rx="4" fill="#141816" stroke="#2c342f"/>
+          <path d="M250 187 V217" stroke="#d9a441" stroke-width="2"/>
+          <circle cx="376" cy="202" r="10" fill="none" stroke="#d9a441" stroke-width="3"/>
+        </svg>
+        <p>A shortwave receiver at 3 AM. The band is open — voices in the static,<br>a picture riding the noise, and something that listens back.<br>JavaScript is the ionosphere here.</p>
+      </div>
+    </div>
+  </noscript>
+</main>
