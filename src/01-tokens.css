@@ -5,11 +5,13 @@
   --chassis: #101413;        /* receiver metal */
   --chassis-2: #181d1b;      /* raised panel */
   --phos: #6fdd8b;           /* phosphor trace */
-  --phos-dim: #2e5c3c;       /* phosphor afterglow */
+  --phos-dim: #2e5c3c;       /* phosphor afterglow — decoration only */
+  --phos-text: #55a86e;      /* phosphor at reading contrast (4.6:1 on the void) */
   --phos-bright: #c9ffd4;    /* saturated peak */
   --amber: #d9a441;          /* pilot lamp / tuned lock */
   --pencil: #9aa39c;         /* engraved + pencil entries */
-  --pencil-dim: #5c655e;
+  --pencil-dim: #5c655e;     /* decoration only */
+  --pencil-text: #838d85;    /* dim engraving that still reads (4.5:1) */
   --danger: #d96d5a;         /* meter redline */
   --focus: #8fd0ff;
 

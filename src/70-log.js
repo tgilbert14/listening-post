@@ -3,7 +3,15 @@
    station keys the same three characters at the same moment — the net
    acknowledging a new listener. */
 LP.log = (() => {
-  const entries = LP.store.get('log', []);
+  /* one poisoned localStorage entry must never kill the receiver */
+  const raw = LP.store.get('log', []);
+  const entries = (Array.isArray(raw) ? raw : [])
+    .filter(e => e && typeof e.id === 'string')
+    .map(e => ({
+      id: e.id, f: Number.isFinite(Number(e.f)) ? Number(e.f) : 0,
+      note: typeof e.note === 'string' ? e.note : '',
+      at: typeof e.at === 'string' ? e.at : '', cls: typeof e.cls === 'string' ? e.cls : '',
+    }));
   const list = document.getElementById('log-list');
   const seen = new Set(entries.map(e => e.id));
   let netDone = LP.store.get('net', false);
@@ -43,19 +51,21 @@ LP.log = (() => {
     }
   }
 
-  /* the net: seven names in the book and the band answers, once */
+  /* the net: seven names in the book and the band answers — once, from the top */
   function maybeNet() {
     if (netDone) return;
     const core = entries.filter(e => e.id !== 'ALL STATIONS').length;
     if (core >= 7) {
       netDone = true;
       LP.store.set('net', true);
-      LP.band.net.until = Date.now() + 26000;
+      LP.band.net.arm();
       setTimeout(() => {
         add('ALL STATIONS', 0, 'the net acknowledged you', 'net');
       }, 9000);
     }
   }
+  /* a reload inside the 9s window must not eat the capstone entry */
+  if (netDone && !seen.has('ALL STATIONS')) add('ALL STATIONS', 0, 'the net acknowledged you', 'net');
 
   /* lock detection: near a station's carrier, signal present, held ~4s */
   function check(t) {
@@ -80,9 +90,15 @@ LP.log = (() => {
       add('THE OTHER', gh.f, 'it asked who was there', 'net');
       gh.heard = true;
     }
-    LP.log.lockedOn = candidate ? candidate.id : null;
+    lastCheckT = t;
   }
 
+  let lastCheckT = 0;
   render();
-  return { has, add, check, render, get lockedOn() { return lockedOn && lockedOn.id; }, set lockedOn(v) { }, entries };
+  return {
+    has, add, check, render, entries,
+    /* the lock light means SIGNAL, not proximity: a station in its dead
+       window doesn't light the readout */
+    get lockedOn() { return (lockedOn && lastCheckT - lastActive < 3000) ? lockedOn.id : null; },
+  };
 })();

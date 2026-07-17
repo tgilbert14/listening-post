@@ -36,22 +36,27 @@ LP.display = (() => {
   const ribbonBuf = new Float32Array(COLS);
   const rng = LP.mulberry(9130);
 
-  let lastRow = 0, lastRibbon = 0, ribbonImg = null;
+  let lastRow = 0, lastRibbon = 0, ribbonImg = null, dirty = true;
+
+  /* soft-knee transfer: peaks glow near-white but never flatten, so QSB
+     fading stays readable all the way down the raster's history */
+  const level = (x) => Math.min(255, Math.floor(255 * Math.tanh(x * 1.55)));
 
   function pushRow(t) {
-    const B = LP.band.BANDS[LP.rx.band];
     const fLo = LP.rx.vfo - WIN / 2, fHi = LP.rx.vfo + WIN / 2;
     LP.band.spectrumRow(rowBuf, fLo, fHi, t, LP.rx.band, rng);
     const d = rowImg.data;
     for (let i = 0; i < COLS; i++) {
-      const v = Math.min(255, Math.floor(rowBuf[i] * 340));
+      const v = level(rowBuf[i]);
       d[i * 4] = LUT[v * 3]; d[i * 4 + 1] = LUT[v * 3 + 1]; d[i * 4 + 2] = LUT[v * 3 + 2]; d[i * 4 + 3] = 255;
     }
     /* scroll down one, new row on top */
     wx.drawImage(wf, 0, 0, COLS, ROWS - 1, 0, 1, COLS, ROWS - 1);
     wx.putImageData(rowImg, 0, 0);
+    dirty = true;
   }
 
+  let ribbonCv = null;
   function ribbon(t) {
     /* the whole band at a glance, redrawn at 2 fps */
     const B = LP.band.BANDS[LP.rx.band];
@@ -59,9 +64,12 @@ LP.display = (() => {
     if (!ribbonImg) ribbonImg = wx.createImageData(COLS, 1);
     const d = ribbonImg.data;
     for (let i = 0; i < COLS; i++) {
-      const v = Math.min(255, Math.floor(ribbonBuf[i] * 300));
+      const v = level(ribbonBuf[i] * 0.88);
       d[i * 4] = LUT[v * 3]; d[i * 4 + 1] = LUT[v * 3 + 1]; d[i * 4 + 2] = LUT[v * 3 + 2]; d[i * 4 + 3] = 255;
     }
+    if (!ribbonCv) { ribbonCv = document.createElement('canvas'); ribbonCv.width = COLS; ribbonCv.height = 1; }
+    ribbonCv.getContext('2d').putImageData(ribbonImg, 0, 0); /* uploaded at 2 fps, not per frame */
+    dirty = true;
   }
 
   function draw(t) {
@@ -74,11 +82,9 @@ LP.display = (() => {
     const wfH = h - wfY - scaleH;
 
     /* ribbon: full band + logged pencil ticks + the cursor */
-    if (ribbonImg) {
+    if (ribbonCv) {
       cx.imageSmoothingEnabled = false;
-      if (!draw._rb) { draw._rb = document.createElement('canvas'); draw._rb.width = COLS; draw._rb.height = 1; }
-      draw._rb.getContext('2d').putImageData(ribbonImg, 0, 0);
-      cx.drawImage(draw._rb, 0, 0, COLS, 1, 0, 0, w, ribbonH);
+      cx.drawImage(ribbonCv, 0, 0, COLS, 1, 0, 0, w, ribbonH);
       cx.imageSmoothingEnabled = true;
     }
     const B = LP.band.BANDS[LP.rx.band];
@@ -113,12 +119,13 @@ LP.display = (() => {
       cx.imageSmoothingEnabled = true;
     }
 
-    /* center line: where you are listening */
+    /* center line: where you are listening (device-pixel true weights) */
+    const px = LP.DPR();
     cx.fillStyle = 'rgba(217,164,65,.55)';
-    cx.fillRect(w / 2 - .5, wfY, 1, wfH);
+    cx.fillRect(w / 2 - px / 2, wfY, px, wfH);
     cx.fillStyle = 'rgba(217,164,65,.9)';
     cx.beginPath();
-    cx.moveTo(w / 2 - 5, wfY); cx.lineTo(w / 2 + 5, wfY); cx.lineTo(w / 2, wfY + 7);
+    cx.moveTo(w / 2 - 5 * px, wfY); cx.lineTo(w / 2 + 5 * px, wfY); cx.lineTo(w / 2, wfY + 7 * px);
     cx.closePath(); cx.fill();
 
     /* frequency scale */
@@ -129,7 +136,7 @@ LP.display = (() => {
     for (let f = first; f < fLo + WIN; f += 5) {
       const x = (f - fLo) / WIN * w;
       cx.fillStyle = 'rgba(154,163,156,.25)';
-      cx.fillRect(x, wfY + wfH, 1, 5);
+      cx.fillRect(x, wfY + wfH, px, 5 * px);
       cx.fillStyle = 'rgba(154,163,156,.55)';
       cx.fillText(String(f), x, h - 5);
     }
@@ -137,35 +144,36 @@ LP.display = (() => {
 
   /* ---------- S-meter ---------- */
   let needle = 0;
-  function drawMeter() {
+  function drawMeter(dt) {
     const w = meter.width, h = meter.height;
+    const px = LP.DPR();
     mx.clearRect(0, 0, w, h);
     /* scale arc */
     const cxp = w / 2, cyp = h * 1.32, r = h * 1.05;
-    mx.strokeStyle = '#2b332e'; mx.lineWidth = 1;
+    mx.strokeStyle = '#2b332e'; mx.lineWidth = px;
     mx.beginPath(); mx.arc(cxp, cyp, r, -2.25, -0.9); mx.stroke();
     for (let i = 0; i <= 8; i++) {
       const a = -2.25 + (i / 8) * 1.35;
       mx.strokeStyle = i > 6 ? 'rgba(217,109,90,.8)' : 'rgba(154,163,156,.5)';
-      mx.lineWidth = i % 2 === 0 ? 1.6 : 1;
+      mx.lineWidth = (i % 2 === 0 ? 1.6 : 1) * px;
       mx.beginPath();
-      mx.moveTo(cxp + Math.cos(a) * (r - 4), cyp + Math.sin(a) * (r - 4));
-      mx.lineTo(cxp + Math.cos(a) * (r + 3), cyp + Math.sin(a) * (r + 3));
+      mx.moveTo(cxp + Math.cos(a) * (r - 4 * px), cyp + Math.sin(a) * (r - 4 * px));
+      mx.lineTo(cxp + Math.cos(a) * (r + 3 * px), cyp + Math.sin(a) * (r + 3 * px));
       mx.stroke();
     }
-    needle = LP.lerp(needle, LP.audio.smeter, 0.14);
+    /* frame-rate-independent ballistics; reduced motion snaps honestly */
+    needle = LP.rm.matches ? LP.audio.smeter
+      : LP.audio.smeter + (needle - LP.audio.smeter) * Math.exp(-(dt || 16) / 110);
     const a = -2.25 + LP.clamp(needle, 0, 1) * 1.35;
-    mx.strokeStyle = '#d9a441'; mx.lineWidth = 1.6;
+    mx.strokeStyle = '#d9a441'; mx.lineWidth = 1.6 * px;
     mx.beginPath();
     mx.moveTo(cxp, cyp);
-    mx.lineTo(cxp + Math.cos(a) * (r + 1), cyp + Math.sin(a) * (r + 1));
+    mx.lineTo(cxp + Math.cos(a) * (r + px), cyp + Math.sin(a) * (r + px));
     mx.stroke();
-    mx.fillStyle = '#0d100e';
-    mx.beginPath(); mx.arc(cxp, cyp, 8, 0, LP.TAU); mx.fill();
   }
 
   /* ---------- readout ---------- */
-  let lastShown = '';
+  let lastShown = '', lastLock = null;
   function readout() {
     const v = LP.rx.vfo;
     const s = `${Math.floor(v / 1000)} ${String(Math.floor(v % 1000)).padStart(3, '0')}.${Math.floor((v * 10) % 10)}`;
@@ -173,7 +181,13 @@ LP.display = (() => {
       lastShown = s;
       freqEl.innerHTML = `${s} <span class="khz">kHz</span>`;
     }
-    freqEl.classList.toggle('locked', !!LP.log.lockedOn);
+    const lock = LP.log.lockedOn;
+    if (lock !== lastLock) {
+      lastLock = lock;
+      freqEl.classList.toggle('locked', !!lock);
+      if (LP.reflectDial) LP.reflectDial();               /* the slider's valuetext carries the signal */
+      if (lock) LP.say(`Signal: ${lock}.`);
+    }
   }
 
   /* ---------- sizing ---------- */
@@ -186,21 +200,27 @@ LP.display = (() => {
     const mr = meter.getBoundingClientRect();
     meter.width = Math.round(mr.width * px);
     meter.height = Math.round(mr.height * px);
+    dirty = true;
     LP.ticker.kick();
   }
   addEventListener('resize', () => { clearTimeout(LP._rzT); LP._rzT = setTimeout(resize, 120); });
 
   /* ---------- the master loop ---------- */
+  let lastVfoDrawn = 0;
   function loop(dt) {
     if (!cv.width) { resize(); if (!cv.width) return; }
     const t = Date.now();
     const dwell = performance.now() - LP.rx.dwellT0;
 
     /* the ghost stalks quiet frequencies */
-    const nearStation = LP.band.stations.some(s => s.band === LP.rx.band && Math.abs(s.f - LP.rx.vfo) < 3 && LP.band.strength(s, t) > 0.05 && (s.type !== 'night' || s.isOn()));
-    LP.band.ghost.tune(LP.rx.vfo, dwell, nearStation);
+    let nearStation = false;
+    for (const s of LP.band.stations) {
+      if (s.band === LP.rx.band && Math.abs(s.f - LP.rx.vfo) < 3 && LP.band.strength(s, t) > 0.05 && (s.type !== 'night' || s.isOn())) { nearStation = true; break; }
+    }
+    LP.band.ghost.tune(LP.rx.vfo, dwell, nearStation, dt);
 
-    const rowEvery = LP.rm.matches ? 500 : 33;
+    const rm = LP.rm.matches;
+    const rowEvery = rm ? 500 : 33;
     if (t - lastRow > rowEvery) { lastRow = t; pushRow(t); }
     if (t - lastRibbon > 500) { lastRibbon = t; ribbon(t); }
 
@@ -208,15 +228,25 @@ LP.display = (() => {
     if (LP.sstv) LP.sstv.update(t);
     if (LP.log) LP.log.check(t);
 
-    draw(t);
-    drawMeter();
+    /* the glass repaints only when its content did (the raster is 30 Hz,
+       the tune is event-driven); the little meter runs every frame */
+    if (LP.rx.vfo !== lastVfoDrawn) dirty = true;
+    if (dirty && (!rm || t - (loop._rmDraw || 0) > 400)) {
+      draw(t);
+      dirty = false;
+      lastVfoDrawn = LP.rx.vfo;
+      loop._rmDraw = t;
+    }
+    drawMeter(dt);
     readout();
   }
+
+  function invalidateRow() { lastRow = 0; dirty = true; }
 
   function boot() {
     resize();
     LP.ticker.add(loop);
   }
 
-  return { boot, resize, frame: loop, WIN };
+  return { boot, resize, frame: loop, WIN, invalidateRow };
 })();

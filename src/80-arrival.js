@@ -11,6 +11,24 @@
 
     if (!LP.rm.matches) {
       setTimeout(() => document.body.classList.remove('arriving'), 900);
+      /* first visit only: the set glides the last nudge into the music —
+         the dial teaches itself, no words needed */
+      if (!LP.store.get('visited', false)) {
+        LP.store.set('visited', true);
+        const from = LP.rx.vfo - 9, to = LP.rx.vfo;
+        const t0 = performance.now();
+        const glide = () => {
+          const p = Math.min(1, (performance.now() - t0) / 2600);
+          LP.rx.vfo = from + (to - from) * (1 - Math.pow(1 - p, 3));
+          if (LP.display.invalidateRow) LP.display.invalidateRow();
+          if (p < 1) return; /* stay in the ticker till landed */
+          LP.rx.dwellT0 = performance.now();
+          if (LP.reflectDial) LP.reflectDial();
+          return false;
+        };
+        LP.rx.vfo = from;
+        LP.ticker.add(glide);
+      }
     }
 
     setTimeout(() => {

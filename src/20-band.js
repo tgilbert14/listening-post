@@ -73,14 +73,15 @@ LP.band = (() => {
   const S = [];
 
   /* the net: when it fires, every keyed station sends the same three
-     characters in unison, once, for a new listener */
-  const net = { until: 0, m: compileMorse('73 73 73', 14, 2600) };
+     characters in unison, once, from the top, for a new listener */
+  const net = { t0: 0, until: 0, m: compileMorse('73 73 73', 14, 2600) };
+  net.arm = () => { net.t0 = Date.now(); net.until = net.t0 + net.m.total; };
 
   const beacon = (id, f, band, text, wpm, pitchBias, note) => S.push({
     id, name: id, f, band, type: 'beacon', bw: 0.12, wpm, pitchBias, note,
     _m: compileMorse(text, wpm, 2200), text,
     activity(t) {
-      if (t < net.until) return morseOn(net.m, t % net.m.total) ? 1 : 0;
+      if (t >= net.t0 && t < net.until) return morseOn(net.m, t - net.t0) ? 1 : 0;
       return morseOn(this._m, t) ? 1 : 0;
     },
   });
@@ -94,22 +95,28 @@ LP.band = (() => {
   S.push({
     id: 'THE LATTICE', name: 'THE LATTICE', f: 6727.0, band: 1, type: 'buzzer', bw: 0.5,
     note: 'five groups of five; different tomorrow',
-    groups: latticeGroups(),
-    /* cycle: 120s. 0-84s buzz at 1.25s period; 84-118s the digits. */
+    _seed: -1, _g: null,
+    groups() {
+      const s = daySeed();
+      if (s !== this._seed) { this._seed = s; this._g = latticeGroups(); }
+      return this._g;
+    },
+    /* cycle: 120s. 0-84s buzz at 1.25s period; 84-118s the digits, unhurried. */
     phase(t) {
       const m = t % 120000;
       if (m < 84000) return { mode: 'buzz', on: (m % 1250) < 820 };
       const dt = m - 84000;
-      const digitIx = Math.floor(dt / 520);
-      const groups = this.groups.join('');
+      const SLOT = 1130; /* 30 slots fill the 84-118s window */
+      const digitIx = Math.floor(dt / SLOT);
+      const groups = this.groups().join('');
       if (digitIx < groups.length + 5) {
-        /* a gap every 5 digits */
+        /* a breath every 5 digits */
         const withGaps = Math.floor(digitIx / 6);
         const inGroup = digitIx % 6;
         if (inGroup === 5) return { mode: 'gap' };
         const gi = withGaps * 5 + inGroup;
         if (gi < groups.length) {
-          const on = (dt % 520) < 380;
+          const on = (dt % SLOT) < 830;
           return { mode: 'digit', digit: +groups[gi], on };
         }
       }
@@ -190,7 +197,7 @@ LP.band = (() => {
     state: 'asleep',      /* asleep | approaching | holding | asking | gone */
     f: 0, t0: 0, heard: false,
     _m: compileMorse('QRZ? QRZ?', 12, 400),
-    tune(vfo, dwellMs, nearStation) {
+    tune(vfo, dwellMs, nearStation, dt = 16.7) {
       if (this.state === 'gone' || document.hidden) return;
       const t = performance.now();
       if (this.state === 'asleep') {
@@ -200,12 +207,12 @@ LP.band = (() => {
           this.t0 = t;
         }
       } else if (this.state === 'approaching') {
-        /* drift toward the visitor's frequency — about nine patient seconds */
-        this.f = LP.lerp(this.f, vfo, 0.0075);
+        /* drift toward the visitor's frequency — nine patient seconds at ANY frame rate */
+        this.f = vfo + (this.f - vfo) * Math.exp(-dt / 2200);
         if (Math.abs(this.f - vfo) < 0.03) { this.state = 'holding'; this.t0 = t; }
         if (dwellMs < 400) { this.state = 'asleep'; } /* they moved; it loses the scent */
       } else if (this.state === 'holding') {
-        this.f = LP.lerp(this.f, vfo, 0.02);
+        this.f = vfo + (this.f - vfo) * Math.exp(-dt / 800);
         if (t - this.t0 > 9000) { this.state = 'asking'; this.t0 = t; }
         if (dwellMs < 400) { this.state = 'asleep'; }
       } else if (this.state === 'asking') {
@@ -227,12 +234,17 @@ LP.band = (() => {
 
   /* ---------- spectrum synthesis for the waterfall ---------- */
   /* one row: intensity 0..1 per column across [fLo..fHi] at time t */
-  const sferic = { until: 0, level: 0 };
+  const sferic = { until: 0, level: 0, lastRoll: 0 };
   function spectrumRow(out, fLo, fHi, t, bandIx, rng) {
     const cols = out.length;
     const noiseBase = 0.055 + bandIx * 0.012;
-    /* lightning crash: rare, broadband, decays over a few rows */
-    if (t > sferic.until && rng() < 0.006) { sferic.until = t + 140 + rng() * 400; sferic.level = 0.25 + rng() * 0.5; }
+    /* lightning crash: a TIME-based hazard (one per ~24s on average), so the
+       storm doesn't care how often anyone renders it */
+    if (t > sferic.until) {
+      const p = 1 - Math.exp(-(t - sferic.lastRoll) / 24000);
+      sferic.lastRoll = t;
+      if (rng() < p) { sferic.until = t + 140 + rng() * 400; sferic.level = 0.25 + rng() * 0.5; }
+    }
     const crash = t < sferic.until ? sferic.level * (0.4 + 0.6 * rng()) : 0;
     for (let i = 0; i < cols; i++) {
       out[i] = noiseBase * (0.4 + rng() * 1.1) + crash * (0.5 + rng() * 0.5);
@@ -252,13 +264,13 @@ LP.band = (() => {
   function paint(out, fLo, fHi, f, bw, amp, st, t) {
     const cols = out.length;
     const span = fHi - fLo;
-    const center = (f - fLo) / span * cols;
+    const center = (f - fLo) / span * cols - 0.5; /* sample column CENTERS: zero-beat bisects the marker */
     const sigma = Math.max(0.7, bw / span * cols / 2);
-    /* type texture: rtty is two tones; music/sstv fill their bandwidth */
+    /* type texture: rtty is two resolved tones; music/sstv fill their bandwidth */
     if (st && st.type === 'rtty') {
-      const off = 0.17 / span * cols / 2;
-      splat(out, center - off, sigma * 0.5, amp);
-      splat(out, center + off, sigma * 0.5, amp * 0.9);
+      const off = 0.34 / span * cols / 2; /* display license: the shift reads as TWO tones */
+      splat(out, center - off, Math.max(0.7, sigma * 0.3), amp);
+      splat(out, center + off, Math.max(0.7, sigma * 0.3), amp * 0.9);
       return;
     }
     if (st && st.type === 'sstv') {
@@ -291,7 +303,25 @@ LP.band = (() => {
     }
   }
 
-  return { BANDS, stations: S, strength, spectrumRow, ghost, latticeGroups, compileMorse, morseOn, sferic, net };
+  /* keying edges for lookahead audio scheduling: [{t (wall ms), on}] inside [t0..t1] */
+  function keyEdges(st, t0, t1) {
+    const useNet = t0 >= net.t0 && t0 < net.until;
+    const m = useNet ? net.m : st._m;
+    const base = useNet ? net.t0 : 0;
+    const edges = [];
+    const from = t0 - base, to = t1 - base;
+    for (let cycle = Math.floor(from / m.total) * m.total; cycle < to; cycle += m.total) {
+      for (const s of m.spans) {
+        const on = cycle + s[0], off = cycle + s[1];
+        if (off < from) continue;
+        if (on > to) break;
+        edges.push({ t: on + base, on: true }, { t: off + base, on: false });
+      }
+    }
+    return edges.filter(e => e.t >= t0 && e.t <= t1);
+  }
+
+  return { BANDS, stations: S, strength, spectrumRow, ghost, latticeGroups, compileMorse, morseOn, sferic, net, keyEdges };
 })();
 
 /* the receiver state: one VFO, one band. Arrival parks it a nudge below

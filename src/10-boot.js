@@ -17,7 +17,7 @@ LP.ticker = (() => {
   function frame(now) {
     rafId = null;
     const dt = Math.min(50, now - last) || 16; last = now;
-    for (const t of [...tasks]) { if (t(dt, now) === false) tasks.delete(t); }
+    for (const t of tasks) { if (t(dt, now) === false) tasks.delete(t); } /* Set tolerates delete-during-iteration */
     if (tasks.size && !document.hidden) rafId = requestAnimationFrame(frame);
   }
   function kick() { if (rafId === null && tasks.size && !document.hidden) { last = performance.now(); rafId = requestAnimationFrame(frame); } }
@@ -37,4 +37,9 @@ LP.mulberry = (seed) => () => {
   return ((t ^ t >>> 14) >>> 0) / 4294967296;
 };
 
-LP.say = (msg) => { const el = document.getElementById('sr-status'); if (el) el.textContent = msg; };
+/* two live regions: durable events must never be clobbered by dial chatter */
+LP.say = (msg) => {
+  clearTimeout(LP._tuneSayT); /* a pending frequency readout yields to real news */
+  const el = document.getElementById('sr-status'); if (el) el.textContent = msg;
+};
+LP.sayTune = (msg) => { const el = document.getElementById('sr-tune'); if (el) el.textContent = msg; };

@@ -39,7 +39,7 @@ a.skip:focus-visible {
 }
 .masthead .eyebrow {
   font-size: 10px; letter-spacing: .34em;
-  color: var(--pencil-dim);
+  color: var(--pencil-text);
   text-transform: uppercase;
   margin-bottom: 7px;
 }
@@ -53,7 +53,7 @@ a.skip:focus-visible {
 }
 .masthead .sub {
   font-size: 10px; letter-spacing: .26em;
-  color: var(--phos-dim);
+  color: var(--phos-text);
   margin-top: 6px;
   text-transform: uppercase;
 }
@@ -121,7 +121,7 @@ a.skip:focus-visible {
   font-variant-numeric: tabular-nums;
   min-width: 7.2ch;
 }
-.freq .khz { font-size: .38em; color: var(--phos-dim); letter-spacing: .2em; margin-left: 6px; }
+.freq .khz { font-size: .38em; color: var(--phos-text); letter-spacing: .2em; margin-left: 6px; }
 .freq.locked { color: var(--amber); text-shadow: 0 0 16px rgba(217,164,65,.5); }
 
 /* the dial: a brushed tuning strip */
@@ -191,7 +191,7 @@ button.chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px
 .develop canvas { width: 100%; display: block; border-radius: 4px; background: #060a08; image-rendering: pixelated; }
 .develop .strip {
   display: flex; justify-content: space-between;
-  font-size: 9px; letter-spacing: .22em; color: var(--pencil-dim);
+  font-size: 9px; letter-spacing: .22em; color: var(--pencil-text);
   padding: 8px 2px 2px; text-transform: uppercase;
 }
 
@@ -215,7 +215,7 @@ button.chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px
 .logbook.open { transform: none; }
 .logbook h2 {
   font-size: 10px; letter-spacing: .3em; text-transform: uppercase;
-  color: var(--pencil-dim);
+  color: var(--pencil-text);
   border-bottom: 1px solid #2b332e;
   padding-bottom: 8px; margin-bottom: 6px;
   font-weight: 400;
@@ -232,8 +232,8 @@ button.chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px
 }
 .logbook li .id { color: var(--phos); letter-spacing: .08em; }
 .logbook li .f { color: var(--amber); font-variant-numeric: tabular-nums; }
-.logbook li .note { grid-column: 1 / -1; color: var(--pencil-dim); font-size: 10.5px; letter-spacing: .04em; }
-.logbook li.empty { color: var(--pencil-dim); font-style: italic; border: 0; }
+.logbook li .note { grid-column: 1 / -1; color: var(--pencil-text); font-size: 10.5px; letter-spacing: .04em; }
+.logbook li.empty { color: var(--pencil-text); font-style: italic; border: 0; }
 .logbook li.net { color: var(--phos-bright); }
 .logbook li.net .id { color: var(--phos-bright); }
 
@@ -262,6 +262,7 @@ body.arriving .masthead, body.arriving .panel { opacity: 0; }
 
 @media (forced-colors: active) {
   button.chip, #dial { border: 1px solid ButtonText; }
+  #dial::after { background: Highlight; forced-color-adjust: none; }
   button.chip[aria-pressed="true"] { border: 3px double Highlight; forced-color-adjust: none; color: Highlight; }
 }
 

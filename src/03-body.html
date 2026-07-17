@@ -26,13 +26,13 @@
 
     <div class="side">
       <canvas id="smeter" aria-hidden="true"></canvas>
-      <button class="chip" id="log-toggle" disabled aria-pressed="false" aria-controls="logbook">Log</button>
+      <button class="chip" id="log-toggle" disabled aria-expanded="false" aria-controls="logbook">Log</button>
       <button class="chip" id="sound-toggle" disabled aria-pressed="false">Sound</button>
     </div>
   </div>
 
-  <aside class="develop" id="develop" aria-label="Picture decoder">
-    <canvas id="sstv" width="320" height="240"></canvas>
+  <aside class="develop" id="develop" aria-label="Picture decoder" hidden>
+    <canvas id="sstv" width="320" height="240" role="img" aria-label="No picture received yet."></canvas>
     <p class="strip"><span id="sstv-id">—</span><span id="sstv-pct"></span></p>
   </aside>
 
@@ -42,6 +42,7 @@
   </aside>
 
   <p class="sr-only" role="status" aria-live="polite" id="sr-status"></p>
+  <p class="sr-only" role="status" aria-live="polite" id="sr-tune"></p>
 
   <noscript>
     <div class="brochure">

@@ -16,7 +16,8 @@ LP.sstv = (() => {
   const src = document.createElement('canvas');
   src.width = W; src.height = H;
   const sx = src.getContext('2d');
-  let luma = null, cycleIx = -1, painted = 0, lastSeen = 0;
+  const CAPTIONS = ['THE DUNES, AFTER MIDNIGHT', 'SHE IS STILL UP THERE', 'WE ARE STILL LISTENING'];
+  let luma = null, genIx = -1, painted = 0, lastSeen = 0, announced = false;
 
   /* ---------- the postcards ---------- */
   function generate(seed) {
@@ -102,7 +103,8 @@ LP.sstv = (() => {
     sx.fillStyle = '#20242c';
     sx.font = '10px Georgia, serif';
     sx.textAlign = 'center';
-    sx.fillText(['THE DUNES, AFTER MIDNIGHT', 'SHE IS STILL UP THERE', 'WE ARE STILL LISTENING'][motif], W / 2, H - 6);
+    sx.fillText(CAPTIONS[motif], W / 2, H - 6);
+    cv.setAttribute('aria-label', `Received picture: ${CAPTIONS[motif].toLowerCase()}.`);
 
     /* luma table for the audio */
     const img = sx.getImageData(0, 0, W, H).data;
@@ -120,17 +122,22 @@ LP.sstv = (() => {
   }
 
   /* ---------- the develop panel ---------- */
+  let _st = null;
+  const station = () => _st || (_st = LP.band.stations.find(s => s.type === 'sstv'));
   function update(t) {
-    const st = LP.band.stations.find(s => s.type === 'sstv');
+    const st = station();
     const off = LP.rx.vfo - st.f;
     const tuned = LP.rx.band === st.band && Math.abs(off) < 3.2;
     const prog = st.prog(t);
     const ix = Math.floor(t / st.PERIOD);
 
-    if (ix !== cycleIx) {
-      cycleIx = ix;
+    /* the picture only exists once someone actually tunes it in (lazy, and
+       deterministic anyway — the cycle index is the whole seed) */
+    if (tuned && ix !== genIx) {
+      genIx = ix;
       generate(ix);
       painted = 0;
+      announced = false;
       cx.fillStyle = '#060a08';
       cx.fillRect(0, 0, W, H);
     }
@@ -138,7 +145,17 @@ LP.sstv = (() => {
       lastSeen = t;
       const target = Math.floor(prog * H);
       const quality = LP.band.strength(st, t) * Math.exp(-(off * off) / 2.2);
-      while (painted < target) {
+      /* lines transmitted while you were away are GONE — mark them as static */
+      if (target - painted > 3) {
+        cx.fillStyle = '#0d120e';
+        cx.fillRect(0, painted, W, target - 2 - painted);
+        cx.globalAlpha = .5; cx.fillStyle = '#1a241c';
+        for (let n = 0; n < (target - painted) * 3; n++) cx.fillRect(Math.random() * W, painted + Math.random() * (target - 2 - painted), 3 + Math.random() * 10, 1);
+        cx.globalAlpha = 1;
+        painted = target - 2;
+      }
+      let budget = 16; /* the film develops; it never hitches a frame */
+      while (painted < target && budget-- > 0) {
         const y = painted;
         /* a badly tuned line comes in skewed and snowy */
         const skew = Math.round(off * 6 + (1 - quality) * (Math.random() * 8 - 4));
@@ -151,6 +168,14 @@ LP.sstv = (() => {
         }
         painted++;
       }
+      if (!announced && painted > 4) {
+        announced = true;
+        LP.say('A picture is developing on 9430.');
+      }
+      if (painted >= H - 1 && announced !== 'done') {
+        announced = 'done';
+        LP.say(`Picture received: ${CAPTIONS[genIx % 3].toLowerCase()}.`);
+      }
       /* the live scan line glows */
       cx.fillStyle = 'rgba(111,221,139,.8)';
       cx.fillRect(0, Math.min(H - 1, target), W, 1);
@@ -161,8 +186,12 @@ LP.sstv = (() => {
       pctEl.textContent = '';
       lastSeen = t;
     }
-    const open = t - lastSeen < 9000 && painted > 0;
-    panel.classList.toggle('open', open || (tuned && prog >= 0));
+    const open = (t - lastSeen < 9000 && painted > 0) || (tuned && prog >= 0);
+    if (open !== update._open) {
+      update._open = open;
+      if (open) { panel.hidden = false; requestAnimationFrame(() => panel.classList.add('open')); }
+      else { panel.classList.remove('open'); setTimeout(() => { if (!update._open) panel.hidden = true; }, 520); }
+    }
   }
 
   return { update, lumaAt };

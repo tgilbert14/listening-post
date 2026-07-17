@@ -87,6 +87,7 @@ LP.audio = (() => {
       return o;
     };
 
+    v.aux = v.aux || [];
     if (st.type === 'beacon' || st.type === 'ghostcw') {
       v.o = osc('sine', 600);
       v.o.connect(g);
@@ -94,10 +95,12 @@ LP.audio = (() => {
       v.o = osc('sawtooth', 238);
       const f = ctx.createBiquadFilter();
       f.type = 'bandpass'; f.frequency.value = 640; f.Q.value = 1.6;
-      v.o.connect(f).connect(g);
+      v.buzzG = ctx.createGain(); v.buzzG.gain.value = 0; /* the duck lives HERE, not on the shared gain */
+      v.o.connect(f).connect(v.buzzG).connect(g);
       v.digit = osc('sine', 500);
       v.digitG = ctx.createGain(); v.digitG.gain.value = 0;
       v.digit.connect(v.digitG).connect(g);
+      v.aux.push(f, v.buzzG, v.digitG);
     } else if (st.type === 'rtty') {
       v.o = osc('sine', 935);
       const lfo = osc('square', st.baud / 2);
@@ -114,12 +117,16 @@ LP.audio = (() => {
       echoIn.connect(g);
       echoIn.connect(dl); dl.connect(fb); fb.connect(dl); dl.connect(g);
       v.lastTone = -1;
+      v.aux.push(echoIn, dl, fb, v.toneG);
     } else if (st.type === 'sstv') {
       v.o = osc('sine', 1500);
       const sg = ctx.createGain(); sg.gain.value = 0.55;
       v.o.connect(sg).connect(g);
+      v.aux.push(sg);
     } else if (st.type === 'music') {
-      /* AURORA's little orchestra: lead + bass through a warm lowpass + echo */
+      /* AURORA's little orchestra: lead + bass through a warm lowpass + echo.
+         The tune rides the WALL CLOCK — retune away and back, and the same
+         broadcast has moved on without you, like a real one. */
       v.bus = ctx.createGain(); v.bus.gain.value = 0.9;
       const lp = ctx.createBiquadFilter();
       lp.type = 'lowpass'; lp.frequency.value = 2100; lp.Q.value = 0.4;
@@ -127,25 +134,42 @@ LP.audio = (() => {
       const fb = ctx.createGain(); fb.gain.value = 0.35;
       v.bus.connect(lp).connect(g);
       lp.connect(dl); dl.connect(fb); fb.connect(dl); dl.connect(g);
-      v.nextNote = 0; v.step = 0;
+      v.step = Math.floor(Date.now() / 320);
+      v.nextNote = ctx.currentTime + (320 - (Date.now() % 320)) / 1000;
       v.scale = [0, 3, 5, 7, 10, 12, 15];
-      v.rng = LP.mulberry(20260716 + new Date().getDate());
+      v.aux.push(v.bus, lp, dl, fb);
     }
     return v;
   }
 
   function killVoice(v) {
     for (const n of v.nodes) { try { n.stop(); } catch { } }
+    for (const n of v.aux || []) { try { n.disconnect(); } catch { } } /* break the delay-feedback cycles */
     try { v.g.disconnect(); } catch { }
+  }
+
+  /* the S-meter reads the MODEL, not the audio path: it works with sound
+     off, opted out, or before the first gesture */
+  function meterScan(t) {
+    const rx = LP.rx;
+    let m = 0;
+    for (const st of LP.band.stations) {
+      if (st.band !== rx.band) continue;
+      const off = rx.vfo - st.f;
+      if (Math.abs(off) > 5) continue;
+      const sel = Math.exp(-(off * off) / (2 * Math.pow(Math.max(st.bw, 0.35) * 0.9, 2)));
+      m = Math.max(m, LP.band.strength(st, t) * sel * (0.4 + 0.6 * st.activity(t)));
+    }
+    const gh = LP.band.ghost;
+    if (gh.state !== 'asleep' && gh.state !== 'gone') m = Math.max(m, gh.strength() * 0.8);
+    return m;
   }
 
   /* per-frame render: called by the display loop with wall time */
   function update(t) {
-    if (!ctx) return;
-    smeter = 0;
-    if (!audible()) return;
+    smeter = meterScan(t);
+    if (!ctx || !audible()) return;
     const rx = LP.rx;
-    const B = LP.band.BANDS[rx.band];
     const now = ctx.currentTime;
     const K = 0.012; /* keying time-constant */
 
@@ -163,19 +187,28 @@ LP.audio = (() => {
       /* selectivity: how much of it lands in the passband */
       const sel = Math.exp(-(off * off) / (2 * Math.pow(Math.max(st.bw, 0.35) * 0.9, 2)));
       let vol = act * str * sel;
-      smeter = Math.max(smeter, str * sel * (0.4 + 0.6 * act));
 
       if (st.type === 'beacon') {
-        /* CW against the BFO: pitch IS your tuning error */
-        const pitch = LP.clamp(300 + Math.abs(off) * 700 + (st.pitchBias || 0), 220, 1900);
+        /* CW against the BFO: pitch IS your tuning error (1 kHz off = 1 kHz beat,
+           floored at 300 Hz so zero-beat stays musical) */
+        const pitch = LP.clamp(300 + Math.abs(off) * 1000 + (st.pitchBias || 0), 220, 1900);
         v.o.frequency.setTargetAtTime(pitch, now, 0.03);
-        v.g.gain.setTargetAtTime(vol * 0.30, now, K);
+        /* keying is SCHEDULED 330ms ahead on the audio clock: a stalled frame
+           can no longer smear a dit into a stuck carrier */
+        const lvl = str * sel * 0.30;
+        const gg = v.g.gain;
+        gg.cancelScheduledValues(now);
+        gg.setTargetAtTime(st.activity(t) > 0 ? lvl : 0, now, K);
+        for (const e of LP.band.keyEdges(st, t, t + 330)) {
+          gg.setTargetAtTime(e.on ? lvl : 0, now + Math.max(0.001, (e.t - t) / 1000), 0.008);
+        }
       } else if (st.type === 'buzzer') {
         const p = st.phase(t);
-        v.g.gain.setTargetAtTime((p.on && p.mode === 'buzz' ? 1 : 0.06) * str * sel * 0.26, now, K);
+        v.g.gain.setTargetAtTime(str * sel * 0.26, now, K);
+        v.buzzG.gain.setTargetAtTime(p.mode === 'buzz' ? (p.on ? 1 : 0.06) : 0.05, now, K);
         if (p.mode === 'digit' && p.on) {
           v.digit.frequency.setTargetAtTime(430 + p.digit * 74, now, 0.01);
-          v.digitG.gain.setTargetAtTime(0.5, now, K);
+          v.digitG.gain.setTargetAtTime(0.55, now, K);
         } else {
           v.digitG.gain.setTargetAtTime(0, now, K);
         }
@@ -207,13 +240,15 @@ LP.audio = (() => {
         }
       } else if (st.type === 'music') {
         v.g.gain.setTargetAtTime(vol * 0.5, now, 0.05);
-        /* schedule the little tune ahead of time */
-        while (v.nextNote < now + 0.25) {
+        /* schedule the little tune ahead of time; the melody is a pure
+           function of the wall-clock step, so the broadcast never restarts */
+        while (v.nextNote < now + 0.35) {
           const when = Math.max(v.nextNote, now + 0.02);
           const beat = 0.32;
-          const deg = v.scale[Math.floor(v.rng() * v.scale.length)];
+          const r = LP.mulberry((20260716 + new Date().getDate() * 977 + v.step) | 0);
+          const deg = v.scale[Math.floor(r() * v.scale.length)];
           if (v.step % 4 === 0) note(v.bus, 110 * Math.pow(2, (v.step % 8 === 0 ? 0 : 7) / 12), when, beat * 3.4, 'triangle', 0.16);
-          if (v.rng() < 0.82) note(v.bus, 440 * Math.pow(2, deg / 12), when, beat * (v.rng() < 0.3 ? 1.9 : 0.95), 'sine', 0.14);
+          if (r() < 0.82) note(v.bus, 440 * Math.pow(2, deg / 12), when, beat * (r() < 0.3 ? 1.9 : 0.95), 'sine', 0.14);
           v.nextNote = when + beat;
           v.step++;
         }
@@ -236,7 +271,6 @@ LP.audio = (() => {
         v.o.frequency.setTargetAtTime(beat, now, 0.03);
         v.g.gain.setTargetAtTime(gh.strength() * 0.2 * Math.exp(-off * off / 4), now, 0.05);
       }
-      smeter = Math.max(smeter, gh.strength() * 0.8);
     }
 
     /* silence + release voices that drifted out of earshot */

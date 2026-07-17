@@ -27,11 +27,13 @@
   --chassis: #101413;        /* receiver metal */
   --chassis-2: #181d1b;      /* raised panel */
   --phos: #6fdd8b;           /* phosphor trace */
-  --phos-dim: #2e5c3c;       /* phosphor afterglow */
+  --phos-dim: #2e5c3c;       /* phosphor afterglow — decoration only */
+  --phos-text: #55a86e;      /* phosphor at reading contrast (4.6:1 on the void) */
   --phos-bright: #c9ffd4;    /* saturated peak */
   --amber: #d9a441;          /* pilot lamp / tuned lock */
   --pencil: #9aa39c;         /* engraved + pencil entries */
-  --pencil-dim: #5c655e;
+  --pencil-dim: #5c655e;     /* decoration only */
+  --pencil-text: #838d85;    /* dim engraving that still reads (4.5:1) */
   --danger: #d96d5a;         /* meter redline */
   --focus: #8fd0ff;
 
@@ -81,7 +83,7 @@ a.skip:focus-visible {
 }
 .masthead .eyebrow {
   font-size: 10px; letter-spacing: .34em;
-  color: var(--pencil-dim);
+  color: var(--pencil-text);
   text-transform: uppercase;
   margin-bottom: 7px;
 }
@@ -95,7 +97,7 @@ a.skip:focus-visible {
 }
 .masthead .sub {
   font-size: 10px; letter-spacing: .26em;
-  color: var(--phos-dim);
+  color: var(--phos-text);
   margin-top: 6px;
   text-transform: uppercase;
 }
@@ -163,7 +165,7 @@ a.skip:focus-visible {
   font-variant-numeric: tabular-nums;
   min-width: 7.2ch;
 }
-.freq .khz { font-size: .38em; color: var(--phos-dim); letter-spacing: .2em; margin-left: 6px; }
+.freq .khz { font-size: .38em; color: var(--phos-text); letter-spacing: .2em; margin-left: 6px; }
 .freq.locked { color: var(--amber); text-shadow: 0 0 16px rgba(217,164,65,.5); }
 
 /* the dial: a brushed tuning strip */
@@ -233,7 +235,7 @@ button.chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px
 .develop canvas { width: 100%; display: block; border-radius: 4px; background: #060a08; image-rendering: pixelated; }
 .develop .strip {
   display: flex; justify-content: space-between;
-  font-size: 9px; letter-spacing: .22em; color: var(--pencil-dim);
+  font-size: 9px; letter-spacing: .22em; color: var(--pencil-text);
   padding: 8px 2px 2px; text-transform: uppercase;
 }
 
@@ -257,7 +259,7 @@ button.chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px
 .logbook.open { transform: none; }
 .logbook h2 {
   font-size: 10px; letter-spacing: .3em; text-transform: uppercase;
-  color: var(--pencil-dim);
+  color: var(--pencil-text);
   border-bottom: 1px solid #2b332e;
   padding-bottom: 8px; margin-bottom: 6px;
   font-weight: 400;
@@ -274,8 +276,8 @@ button.chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px
 }
 .logbook li .id { color: var(--phos); letter-spacing: .08em; }
 .logbook li .f { color: var(--amber); font-variant-numeric: tabular-nums; }
-.logbook li .note { grid-column: 1 / -1; color: var(--pencil-dim); font-size: 10.5px; letter-spacing: .04em; }
-.logbook li.empty { color: var(--pencil-dim); font-style: italic; border: 0; }
+.logbook li .note { grid-column: 1 / -1; color: var(--pencil-text); font-size: 10.5px; letter-spacing: .04em; }
+.logbook li.empty { color: var(--pencil-text); font-style: italic; border: 0; }
 .logbook li.net { color: var(--phos-bright); }
 .logbook li.net .id { color: var(--phos-bright); }
 
@@ -304,6 +306,7 @@ body.arriving .masthead, body.arriving .panel { opacity: 0; }
 
 @media (forced-colors: active) {
   button.chip, #dial { border: 1px solid ButtonText; }
+  #dial::after { background: Highlight; forced-color-adjust: none; }
   button.chip[aria-pressed="true"] { border: 3px double Highlight; forced-color-adjust: none; color: Highlight; }
 }
 
@@ -356,13 +359,13 @@ body.arriving .masthead, body.arriving .panel { opacity: 0; }
 
     <div class="side">
       <canvas id="smeter" aria-hidden="true"></canvas>
-      <button class="chip" id="log-toggle" disabled aria-pressed="false" aria-controls="logbook">Log</button>
+      <button class="chip" id="log-toggle" disabled aria-expanded="false" aria-controls="logbook">Log</button>
       <button class="chip" id="sound-toggle" disabled aria-pressed="false">Sound</button>
     </div>
   </div>
 
-  <aside class="develop" id="develop" aria-label="Picture decoder">
-    <canvas id="sstv" width="320" height="240"></canvas>
+  <aside class="develop" id="develop" aria-label="Picture decoder" hidden>
+    <canvas id="sstv" width="320" height="240" role="img" aria-label="No picture received yet."></canvas>
     <p class="strip"><span id="sstv-id">—</span><span id="sstv-pct"></span></p>
   </aside>
 
@@ -372,6 +375,7 @@ body.arriving .masthead, body.arriving .panel { opacity: 0; }
   </aside>
 
   <p class="sr-only" role="status" aria-live="polite" id="sr-status"></p>
+  <p class="sr-only" role="status" aria-live="polite" id="sr-tune"></p>
 
   <noscript>
     <div class="brochure">
@@ -422,7 +426,7 @@ LP.ticker = (() => {
   function frame(now) {
     rafId = null;
     const dt = Math.min(50, now - last) || 16; last = now;
-    for (const t of [...tasks]) { if (t(dt, now) === false) tasks.delete(t); }
+    for (const t of tasks) { if (t(dt, now) === false) tasks.delete(t); } /* Set tolerates delete-during-iteration */
     if (tasks.size && !document.hidden) rafId = requestAnimationFrame(frame);
   }
   function kick() { if (rafId === null && tasks.size && !document.hidden) { last = performance.now(); rafId = requestAnimationFrame(frame); } }
@@ -442,7 +446,12 @@ LP.mulberry = (seed) => () => {
   return ((t ^ t >>> 14) >>> 0) / 4294967296;
 };
 
-LP.say = (msg) => { const el = document.getElementById('sr-status'); if (el) el.textContent = msg; };
+/* two live regions: durable events must never be clobbered by dial chatter */
+LP.say = (msg) => {
+  clearTimeout(LP._tuneSayT); /* a pending frequency readout yields to real news */
+  const el = document.getElementById('sr-status'); if (el) el.textContent = msg;
+};
+LP.sayTune = (msg) => { const el = document.getElementById('sr-tune'); if (el) el.textContent = msg; };
 
 
 /* THE LISTENING POST — the band. One model is the single source of truth:
@@ -520,14 +529,15 @@ LP.band = (() => {
   const S = [];
 
   /* the net: when it fires, every keyed station sends the same three
-     characters in unison, once, for a new listener */
-  const net = { until: 0, m: compileMorse('73 73 73', 14, 2600) };
+     characters in unison, once, from the top, for a new listener */
+  const net = { t0: 0, until: 0, m: compileMorse('73 73 73', 14, 2600) };
+  net.arm = () => { net.t0 = Date.now(); net.until = net.t0 + net.m.total; };
 
   const beacon = (id, f, band, text, wpm, pitchBias, note) => S.push({
     id, name: id, f, band, type: 'beacon', bw: 0.12, wpm, pitchBias, note,
     _m: compileMorse(text, wpm, 2200), text,
     activity(t) {
-      if (t < net.until) return morseOn(net.m, t % net.m.total) ? 1 : 0;
+      if (t >= net.t0 && t < net.until) return morseOn(net.m, t - net.t0) ? 1 : 0;
       return morseOn(this._m, t) ? 1 : 0;
     },
   });
@@ -541,22 +551,28 @@ LP.band = (() => {
   S.push({
     id: 'THE LATTICE', name: 'THE LATTICE', f: 6727.0, band: 1, type: 'buzzer', bw: 0.5,
     note: 'five groups of five; different tomorrow',
-    groups: latticeGroups(),
-    /* cycle: 120s. 0-84s buzz at 1.25s period; 84-118s the digits. */
+    _seed: -1, _g: null,
+    groups() {
+      const s = daySeed();
+      if (s !== this._seed) { this._seed = s; this._g = latticeGroups(); }
+      return this._g;
+    },
+    /* cycle: 120s. 0-84s buzz at 1.25s period; 84-118s the digits, unhurried. */
     phase(t) {
       const m = t % 120000;
       if (m < 84000) return { mode: 'buzz', on: (m % 1250) < 820 };
       const dt = m - 84000;
-      const digitIx = Math.floor(dt / 520);
-      const groups = this.groups.join('');
+      const SLOT = 1130; /* 30 slots fill the 84-118s window */
+      const digitIx = Math.floor(dt / SLOT);
+      const groups = this.groups().join('');
       if (digitIx < groups.length + 5) {
-        /* a gap every 5 digits */
+        /* a breath every 5 digits */
         const withGaps = Math.floor(digitIx / 6);
         const inGroup = digitIx % 6;
         if (inGroup === 5) return { mode: 'gap' };
         const gi = withGaps * 5 + inGroup;
         if (gi < groups.length) {
-          const on = (dt % 520) < 380;
+          const on = (dt % SLOT) < 830;
           return { mode: 'digit', digit: +groups[gi], on };
         }
       }
@@ -637,7 +653,7 @@ LP.band = (() => {
     state: 'asleep',      /* asleep | approaching | holding | asking | gone */
     f: 0, t0: 0, heard: false,
     _m: compileMorse('QRZ? QRZ?', 12, 400),
-    tune(vfo, dwellMs, nearStation) {
+    tune(vfo, dwellMs, nearStation, dt = 16.7) {
       if (this.state === 'gone' || document.hidden) return;
       const t = performance.now();
       if (this.state === 'asleep') {
@@ -647,12 +663,12 @@ LP.band = (() => {
           this.t0 = t;
         }
       } else if (this.state === 'approaching') {
-        /* drift toward the visitor's frequency — about nine patient seconds */
-        this.f = LP.lerp(this.f, vfo, 0.0075);
+        /* drift toward the visitor's frequency — nine patient seconds at ANY frame rate */
+        this.f = vfo + (this.f - vfo) * Math.exp(-dt / 2200);
         if (Math.abs(this.f - vfo) < 0.03) { this.state = 'holding'; this.t0 = t; }
         if (dwellMs < 400) { this.state = 'asleep'; } /* they moved; it loses the scent */
       } else if (this.state === 'holding') {
-        this.f = LP.lerp(this.f, vfo, 0.02);
+        this.f = vfo + (this.f - vfo) * Math.exp(-dt / 800);
         if (t - this.t0 > 9000) { this.state = 'asking'; this.t0 = t; }
         if (dwellMs < 400) { this.state = 'asleep'; }
       } else if (this.state === 'asking') {
@@ -674,12 +690,17 @@ LP.band = (() => {
 
   /* ---------- spectrum synthesis for the waterfall ---------- */
   /* one row: intensity 0..1 per column across [fLo..fHi] at time t */
-  const sferic = { until: 0, level: 0 };
+  const sferic = { until: 0, level: 0, lastRoll: 0 };
   function spectrumRow(out, fLo, fHi, t, bandIx, rng) {
     const cols = out.length;
     const noiseBase = 0.055 + bandIx * 0.012;
-    /* lightning crash: rare, broadband, decays over a few rows */
-    if (t > sferic.until && rng() < 0.006) { sferic.until = t + 140 + rng() * 400; sferic.level = 0.25 + rng() * 0.5; }
+    /* lightning crash: a TIME-based hazard (one per ~24s on average), so the
+       storm doesn't care how often anyone renders it */
+    if (t > sferic.until) {
+      const p = 1 - Math.exp(-(t - sferic.lastRoll) / 24000);
+      sferic.lastRoll = t;
+      if (rng() < p) { sferic.until = t + 140 + rng() * 400; sferic.level = 0.25 + rng() * 0.5; }
+    }
     const crash = t < sferic.until ? sferic.level * (0.4 + 0.6 * rng()) : 0;
     for (let i = 0; i < cols; i++) {
       out[i] = noiseBase * (0.4 + rng() * 1.1) + crash * (0.5 + rng() * 0.5);
@@ -699,13 +720,13 @@ LP.band = (() => {
   function paint(out, fLo, fHi, f, bw, amp, st, t) {
     const cols = out.length;
     const span = fHi - fLo;
-    const center = (f - fLo) / span * cols;
+    const center = (f - fLo) / span * cols - 0.5; /* sample column CENTERS: zero-beat bisects the marker */
     const sigma = Math.max(0.7, bw / span * cols / 2);
-    /* type texture: rtty is two tones; music/sstv fill their bandwidth */
+    /* type texture: rtty is two resolved tones; music/sstv fill their bandwidth */
     if (st && st.type === 'rtty') {
-      const off = 0.17 / span * cols / 2;
-      splat(out, center - off, sigma * 0.5, amp);
-      splat(out, center + off, sigma * 0.5, amp * 0.9);
+      const off = 0.34 / span * cols / 2; /* display license: the shift reads as TWO tones */
+      splat(out, center - off, Math.max(0.7, sigma * 0.3), amp);
+      splat(out, center + off, Math.max(0.7, sigma * 0.3), amp * 0.9);
       return;
     }
     if (st && st.type === 'sstv') {
@@ -738,7 +759,25 @@ LP.band = (() => {
     }
   }
 
-  return { BANDS, stations: S, strength, spectrumRow, ghost, latticeGroups, compileMorse, morseOn, sferic, net };
+  /* keying edges for lookahead audio scheduling: [{t (wall ms), on}] inside [t0..t1] */
+  function keyEdges(st, t0, t1) {
+    const useNet = t0 >= net.t0 && t0 < net.until;
+    const m = useNet ? net.m : st._m;
+    const base = useNet ? net.t0 : 0;
+    const edges = [];
+    const from = t0 - base, to = t1 - base;
+    for (let cycle = Math.floor(from / m.total) * m.total; cycle < to; cycle += m.total) {
+      for (const s of m.spans) {
+        const on = cycle + s[0], off = cycle + s[1];
+        if (off < from) continue;
+        if (on > to) break;
+        edges.push({ t: on + base, on: true }, { t: off + base, on: false });
+      }
+    }
+    return edges.filter(e => e.t >= t0 && e.t <= t1);
+  }
+
+  return { BANDS, stations: S, strength, spectrumRow, ghost, latticeGroups, compileMorse, morseOn, sferic, net, keyEdges };
 })();
 
 /* the receiver state: one VFO, one band. Arrival parks it a nudge below
@@ -836,6 +875,7 @@ LP.audio = (() => {
       return o;
     };
 
+    v.aux = v.aux || [];
     if (st.type === 'beacon' || st.type === 'ghostcw') {
       v.o = osc('sine', 600);
       v.o.connect(g);
@@ -843,10 +883,12 @@ LP.audio = (() => {
       v.o = osc('sawtooth', 238);
       const f = ctx.createBiquadFilter();
       f.type = 'bandpass'; f.frequency.value = 640; f.Q.value = 1.6;
-      v.o.connect(f).connect(g);
+      v.buzzG = ctx.createGain(); v.buzzG.gain.value = 0; /* the duck lives HERE, not on the shared gain */
+      v.o.connect(f).connect(v.buzzG).connect(g);
       v.digit = osc('sine', 500);
       v.digitG = ctx.createGain(); v.digitG.gain.value = 0;
       v.digit.connect(v.digitG).connect(g);
+      v.aux.push(f, v.buzzG, v.digitG);
     } else if (st.type === 'rtty') {
       v.o = osc('sine', 935);
       const lfo = osc('square', st.baud / 2);
@@ -863,12 +905,16 @@ LP.audio = (() => {
       echoIn.connect(g);
       echoIn.connect(dl); dl.connect(fb); fb.connect(dl); dl.connect(g);
       v.lastTone = -1;
+      v.aux.push(echoIn, dl, fb, v.toneG);
     } else if (st.type === 'sstv') {
       v.o = osc('sine', 1500);
       const sg = ctx.createGain(); sg.gain.value = 0.55;
       v.o.connect(sg).connect(g);
+      v.aux.push(sg);
     } else if (st.type === 'music') {
-      /* AURORA's little orchestra: lead + bass through a warm lowpass + echo */
+      /* AURORA's little orchestra: lead + bass through a warm lowpass + echo.
+         The tune rides the WALL CLOCK — retune away and back, and the same
+         broadcast has moved on without you, like a real one. */
       v.bus = ctx.createGain(); v.bus.gain.value = 0.9;
       const lp = ctx.createBiquadFilter();
       lp.type = 'lowpass'; lp.frequency.value = 2100; lp.Q.value = 0.4;
@@ -876,25 +922,42 @@ LP.audio = (() => {
       const fb = ctx.createGain(); fb.gain.value = 0.35;
       v.bus.connect(lp).connect(g);
       lp.connect(dl); dl.connect(fb); fb.connect(dl); dl.connect(g);
-      v.nextNote = 0; v.step = 0;
+      v.step = Math.floor(Date.now() / 320);
+      v.nextNote = ctx.currentTime + (320 - (Date.now() % 320)) / 1000;
       v.scale = [0, 3, 5, 7, 10, 12, 15];
-      v.rng = LP.mulberry(20260716 + new Date().getDate());
+      v.aux.push(v.bus, lp, dl, fb);
     }
     return v;
   }
 
   function killVoice(v) {
     for (const n of v.nodes) { try { n.stop(); } catch { } }
+    for (const n of v.aux || []) { try { n.disconnect(); } catch { } } /* break the delay-feedback cycles */
     try { v.g.disconnect(); } catch { }
+  }
+
+  /* the S-meter reads the MODEL, not the audio path: it works with sound
+     off, opted out, or before the first gesture */
+  function meterScan(t) {
+    const rx = LP.rx;
+    let m = 0;
+    for (const st of LP.band.stations) {
+      if (st.band !== rx.band) continue;
+      const off = rx.vfo - st.f;
+      if (Math.abs(off) > 5) continue;
+      const sel = Math.exp(-(off * off) / (2 * Math.pow(Math.max(st.bw, 0.35) * 0.9, 2)));
+      m = Math.max(m, LP.band.strength(st, t) * sel * (0.4 + 0.6 * st.activity(t)));
+    }
+    const gh = LP.band.ghost;
+    if (gh.state !== 'asleep' && gh.state !== 'gone') m = Math.max(m, gh.strength() * 0.8);
+    return m;
   }
 
   /* per-frame render: called by the display loop with wall time */
   function update(t) {
-    if (!ctx) return;
-    smeter = 0;
-    if (!audible()) return;
+    smeter = meterScan(t);
+    if (!ctx || !audible()) return;
     const rx = LP.rx;
-    const B = LP.band.BANDS[rx.band];
     const now = ctx.currentTime;
     const K = 0.012; /* keying time-constant */
 
@@ -912,19 +975,28 @@ LP.audio = (() => {
       /* selectivity: how much of it lands in the passband */
       const sel = Math.exp(-(off * off) / (2 * Math.pow(Math.max(st.bw, 0.35) * 0.9, 2)));
       let vol = act * str * sel;
-      smeter = Math.max(smeter, str * sel * (0.4 + 0.6 * act));
 
       if (st.type === 'beacon') {
-        /* CW against the BFO: pitch IS your tuning error */
-        const pitch = LP.clamp(300 + Math.abs(off) * 700 + (st.pitchBias || 0), 220, 1900);
+        /* CW against the BFO: pitch IS your tuning error (1 kHz off = 1 kHz beat,
+           floored at 300 Hz so zero-beat stays musical) */
+        const pitch = LP.clamp(300 + Math.abs(off) * 1000 + (st.pitchBias || 0), 220, 1900);
         v.o.frequency.setTargetAtTime(pitch, now, 0.03);
-        v.g.gain.setTargetAtTime(vol * 0.30, now, K);
+        /* keying is SCHEDULED 330ms ahead on the audio clock: a stalled frame
+           can no longer smear a dit into a stuck carrier */
+        const lvl = str * sel * 0.30;
+        const gg = v.g.gain;
+        gg.cancelScheduledValues(now);
+        gg.setTargetAtTime(st.activity(t) > 0 ? lvl : 0, now, K);
+        for (const e of LP.band.keyEdges(st, t, t + 330)) {
+          gg.setTargetAtTime(e.on ? lvl : 0, now + Math.max(0.001, (e.t - t) / 1000), 0.008);
+        }
       } else if (st.type === 'buzzer') {
         const p = st.phase(t);
-        v.g.gain.setTargetAtTime((p.on && p.mode === 'buzz' ? 1 : 0.06) * str * sel * 0.26, now, K);
+        v.g.gain.setTargetAtTime(str * sel * 0.26, now, K);
+        v.buzzG.gain.setTargetAtTime(p.mode === 'buzz' ? (p.on ? 1 : 0.06) : 0.05, now, K);
         if (p.mode === 'digit' && p.on) {
           v.digit.frequency.setTargetAtTime(430 + p.digit * 74, now, 0.01);
-          v.digitG.gain.setTargetAtTime(0.5, now, K);
+          v.digitG.gain.setTargetAtTime(0.55, now, K);
         } else {
           v.digitG.gain.setTargetAtTime(0, now, K);
         }
@@ -956,13 +1028,15 @@ LP.audio = (() => {
         }
       } else if (st.type === 'music') {
         v.g.gain.setTargetAtTime(vol * 0.5, now, 0.05);
-        /* schedule the little tune ahead of time */
-        while (v.nextNote < now + 0.25) {
+        /* schedule the little tune ahead of time; the melody is a pure
+           function of the wall-clock step, so the broadcast never restarts */
+        while (v.nextNote < now + 0.35) {
           const when = Math.max(v.nextNote, now + 0.02);
           const beat = 0.32;
-          const deg = v.scale[Math.floor(v.rng() * v.scale.length)];
+          const r = LP.mulberry((20260716 + new Date().getDate() * 977 + v.step) | 0);
+          const deg = v.scale[Math.floor(r() * v.scale.length)];
           if (v.step % 4 === 0) note(v.bus, 110 * Math.pow(2, (v.step % 8 === 0 ? 0 : 7) / 12), when, beat * 3.4, 'triangle', 0.16);
-          if (v.rng() < 0.82) note(v.bus, 440 * Math.pow(2, deg / 12), when, beat * (v.rng() < 0.3 ? 1.9 : 0.95), 'sine', 0.14);
+          if (r() < 0.82) note(v.bus, 440 * Math.pow(2, deg / 12), when, beat * (r() < 0.3 ? 1.9 : 0.95), 'sine', 0.14);
           v.nextNote = when + beat;
           v.step++;
         }
@@ -985,7 +1059,6 @@ LP.audio = (() => {
         v.o.frequency.setTargetAtTime(beat, now, 0.03);
         v.g.gain.setTargetAtTime(gh.strength() * 0.2 * Math.exp(-off * off / 4), now, 0.05);
       }
-      smeter = Math.max(smeter, gh.strength() * 0.8);
     }
 
     /* silence + release voices that drifted out of earshot */
@@ -1056,22 +1129,27 @@ LP.display = (() => {
   const ribbonBuf = new Float32Array(COLS);
   const rng = LP.mulberry(9130);
 
-  let lastRow = 0, lastRibbon = 0, ribbonImg = null;
+  let lastRow = 0, lastRibbon = 0, ribbonImg = null, dirty = true;
+
+  /* soft-knee transfer: peaks glow near-white but never flatten, so QSB
+     fading stays readable all the way down the raster's history */
+  const level = (x) => Math.min(255, Math.floor(255 * Math.tanh(x * 1.55)));
 
   function pushRow(t) {
-    const B = LP.band.BANDS[LP.rx.band];
     const fLo = LP.rx.vfo - WIN / 2, fHi = LP.rx.vfo + WIN / 2;
     LP.band.spectrumRow(rowBuf, fLo, fHi, t, LP.rx.band, rng);
     const d = rowImg.data;
     for (let i = 0; i < COLS; i++) {
-      const v = Math.min(255, Math.floor(rowBuf[i] * 340));
+      const v = level(rowBuf[i]);
       d[i * 4] = LUT[v * 3]; d[i * 4 + 1] = LUT[v * 3 + 1]; d[i * 4 + 2] = LUT[v * 3 + 2]; d[i * 4 + 3] = 255;
     }
     /* scroll down one, new row on top */
     wx.drawImage(wf, 0, 0, COLS, ROWS - 1, 0, 1, COLS, ROWS - 1);
     wx.putImageData(rowImg, 0, 0);
+    dirty = true;
   }
 
+  let ribbonCv = null;
   function ribbon(t) {
     /* the whole band at a glance, redrawn at 2 fps */
     const B = LP.band.BANDS[LP.rx.band];
@@ -1079,9 +1157,12 @@ LP.display = (() => {
     if (!ribbonImg) ribbonImg = wx.createImageData(COLS, 1);
     const d = ribbonImg.data;
     for (let i = 0; i < COLS; i++) {
-      const v = Math.min(255, Math.floor(ribbonBuf[i] * 300));
+      const v = level(ribbonBuf[i] * 0.88);
       d[i * 4] = LUT[v * 3]; d[i * 4 + 1] = LUT[v * 3 + 1]; d[i * 4 + 2] = LUT[v * 3 + 2]; d[i * 4 + 3] = 255;
     }
+    if (!ribbonCv) { ribbonCv = document.createElement('canvas'); ribbonCv.width = COLS; ribbonCv.height = 1; }
+    ribbonCv.getContext('2d').putImageData(ribbonImg, 0, 0); /* uploaded at 2 fps, not per frame */
+    dirty = true;
   }
 
   function draw(t) {
@@ -1094,11 +1175,9 @@ LP.display = (() => {
     const wfH = h - wfY - scaleH;
 
     /* ribbon: full band + logged pencil ticks + the cursor */
-    if (ribbonImg) {
+    if (ribbonCv) {
       cx.imageSmoothingEnabled = false;
-      if (!draw._rb) { draw._rb = document.createElement('canvas'); draw._rb.width = COLS; draw._rb.height = 1; }
-      draw._rb.getContext('2d').putImageData(ribbonImg, 0, 0);
-      cx.drawImage(draw._rb, 0, 0, COLS, 1, 0, 0, w, ribbonH);
+      cx.drawImage(ribbonCv, 0, 0, COLS, 1, 0, 0, w, ribbonH);
       cx.imageSmoothingEnabled = true;
     }
     const B = LP.band.BANDS[LP.rx.band];
@@ -1133,12 +1212,13 @@ LP.display = (() => {
       cx.imageSmoothingEnabled = true;
     }
 
-    /* center line: where you are listening */
+    /* center line: where you are listening (device-pixel true weights) */
+    const px = LP.DPR();
     cx.fillStyle = 'rgba(217,164,65,.55)';
-    cx.fillRect(w / 2 - .5, wfY, 1, wfH);
+    cx.fillRect(w / 2 - px / 2, wfY, px, wfH);
     cx.fillStyle = 'rgba(217,164,65,.9)';
     cx.beginPath();
-    cx.moveTo(w / 2 - 5, wfY); cx.lineTo(w / 2 + 5, wfY); cx.lineTo(w / 2, wfY + 7);
+    cx.moveTo(w / 2 - 5 * px, wfY); cx.lineTo(w / 2 + 5 * px, wfY); cx.lineTo(w / 2, wfY + 7 * px);
     cx.closePath(); cx.fill();
 
     /* frequency scale */
@@ -1149,7 +1229,7 @@ LP.display = (() => {
     for (let f = first; f < fLo + WIN; f += 5) {
       const x = (f - fLo) / WIN * w;
       cx.fillStyle = 'rgba(154,163,156,.25)';
-      cx.fillRect(x, wfY + wfH, 1, 5);
+      cx.fillRect(x, wfY + wfH, px, 5 * px);
       cx.fillStyle = 'rgba(154,163,156,.55)';
       cx.fillText(String(f), x, h - 5);
     }
@@ -1157,35 +1237,36 @@ LP.display = (() => {
 
   /* ---------- S-meter ---------- */
   let needle = 0;
-  function drawMeter() {
+  function drawMeter(dt) {
     const w = meter.width, h = meter.height;
+    const px = LP.DPR();
     mx.clearRect(0, 0, w, h);
     /* scale arc */
     const cxp = w / 2, cyp = h * 1.32, r = h * 1.05;
-    mx.strokeStyle = '#2b332e'; mx.lineWidth = 1;
+    mx.strokeStyle = '#2b332e'; mx.lineWidth = px;
     mx.beginPath(); mx.arc(cxp, cyp, r, -2.25, -0.9); mx.stroke();
     for (let i = 0; i <= 8; i++) {
       const a = -2.25 + (i / 8) * 1.35;
       mx.strokeStyle = i > 6 ? 'rgba(217,109,90,.8)' : 'rgba(154,163,156,.5)';
-      mx.lineWidth = i % 2 === 0 ? 1.6 : 1;
+      mx.lineWidth = (i % 2 === 0 ? 1.6 : 1) * px;
       mx.beginPath();
-      mx.moveTo(cxp + Math.cos(a) * (r - 4), cyp + Math.sin(a) * (r - 4));
-      mx.lineTo(cxp + Math.cos(a) * (r + 3), cyp + Math.sin(a) * (r + 3));
+      mx.moveTo(cxp + Math.cos(a) * (r - 4 * px), cyp + Math.sin(a) * (r - 4 * px));
+      mx.lineTo(cxp + Math.cos(a) * (r + 3 * px), cyp + Math.sin(a) * (r + 3 * px));
       mx.stroke();
     }
-    needle = LP.lerp(needle, LP.audio.smeter, 0.14);
+    /* frame-rate-independent ballistics; reduced motion snaps honestly */
+    needle = LP.rm.matches ? LP.audio.smeter
+      : LP.audio.smeter + (needle - LP.audio.smeter) * Math.exp(-(dt || 16) / 110);
     const a = -2.25 + LP.clamp(needle, 0, 1) * 1.35;
-    mx.strokeStyle = '#d9a441'; mx.lineWidth = 1.6;
+    mx.strokeStyle = '#d9a441'; mx.lineWidth = 1.6 * px;
     mx.beginPath();
     mx.moveTo(cxp, cyp);
-    mx.lineTo(cxp + Math.cos(a) * (r + 1), cyp + Math.sin(a) * (r + 1));
+    mx.lineTo(cxp + Math.cos(a) * (r + px), cyp + Math.sin(a) * (r + px));
     mx.stroke();
-    mx.fillStyle = '#0d100e';
-    mx.beginPath(); mx.arc(cxp, cyp, 8, 0, LP.TAU); mx.fill();
   }
 
   /* ---------- readout ---------- */
-  let lastShown = '';
+  let lastShown = '', lastLock = null;
   function readout() {
     const v = LP.rx.vfo;
     const s = `${Math.floor(v / 1000)} ${String(Math.floor(v % 1000)).padStart(3, '0')}.${Math.floor((v * 10) % 10)}`;
@@ -1193,7 +1274,13 @@ LP.display = (() => {
       lastShown = s;
       freqEl.innerHTML = `${s} <span class="khz">kHz</span>`;
     }
-    freqEl.classList.toggle('locked', !!LP.log.lockedOn);
+    const lock = LP.log.lockedOn;
+    if (lock !== lastLock) {
+      lastLock = lock;
+      freqEl.classList.toggle('locked', !!lock);
+      if (LP.reflectDial) LP.reflectDial();               /* the slider's valuetext carries the signal */
+      if (lock) LP.say(`Signal: ${lock}.`);
+    }
   }
 
   /* ---------- sizing ---------- */
@@ -1206,21 +1293,27 @@ LP.display = (() => {
     const mr = meter.getBoundingClientRect();
     meter.width = Math.round(mr.width * px);
     meter.height = Math.round(mr.height * px);
+    dirty = true;
     LP.ticker.kick();
   }
   addEventListener('resize', () => { clearTimeout(LP._rzT); LP._rzT = setTimeout(resize, 120); });
 
   /* ---------- the master loop ---------- */
+  let lastVfoDrawn = 0;
   function loop(dt) {
     if (!cv.width) { resize(); if (!cv.width) return; }
     const t = Date.now();
     const dwell = performance.now() - LP.rx.dwellT0;
 
     /* the ghost stalks quiet frequencies */
-    const nearStation = LP.band.stations.some(s => s.band === LP.rx.band && Math.abs(s.f - LP.rx.vfo) < 3 && LP.band.strength(s, t) > 0.05 && (s.type !== 'night' || s.isOn()));
-    LP.band.ghost.tune(LP.rx.vfo, dwell, nearStation);
+    let nearStation = false;
+    for (const s of LP.band.stations) {
+      if (s.band === LP.rx.band && Math.abs(s.f - LP.rx.vfo) < 3 && LP.band.strength(s, t) > 0.05 && (s.type !== 'night' || s.isOn())) { nearStation = true; break; }
+    }
+    LP.band.ghost.tune(LP.rx.vfo, dwell, nearStation, dt);
 
-    const rowEvery = LP.rm.matches ? 500 : 33;
+    const rm = LP.rm.matches;
+    const rowEvery = rm ? 500 : 33;
     if (t - lastRow > rowEvery) { lastRow = t; pushRow(t); }
     if (t - lastRibbon > 500) { lastRibbon = t; ribbon(t); }
 
@@ -1228,17 +1321,27 @@ LP.display = (() => {
     if (LP.sstv) LP.sstv.update(t);
     if (LP.log) LP.log.check(t);
 
-    draw(t);
-    drawMeter();
+    /* the glass repaints only when its content did (the raster is 30 Hz,
+       the tune is event-driven); the little meter runs every frame */
+    if (LP.rx.vfo !== lastVfoDrawn) dirty = true;
+    if (dirty && (!rm || t - (loop._rmDraw || 0) > 400)) {
+      draw(t);
+      dirty = false;
+      lastVfoDrawn = LP.rx.vfo;
+      loop._rmDraw = t;
+    }
+    drawMeter(dt);
     readout();
   }
+
+  function invalidateRow() { lastRow = 0; dirty = true; }
 
   function boot() {
     resize();
     LP.ticker.add(loop);
   }
 
-  return { boot, resize, frame: loop, WIN };
+  return { boot, resize, frame: loop, WIN, invalidateRow };
 })();
 
 
@@ -1260,7 +1363,8 @@ LP.sstv = (() => {
   const src = document.createElement('canvas');
   src.width = W; src.height = H;
   const sx = src.getContext('2d');
-  let luma = null, cycleIx = -1, painted = 0, lastSeen = 0;
+  const CAPTIONS = ['THE DUNES, AFTER MIDNIGHT', 'SHE IS STILL UP THERE', 'WE ARE STILL LISTENING'];
+  let luma = null, genIx = -1, painted = 0, lastSeen = 0, announced = false;
 
   /* ---------- the postcards ---------- */
   function generate(seed) {
@@ -1346,7 +1450,8 @@ LP.sstv = (() => {
     sx.fillStyle = '#20242c';
     sx.font = '10px Georgia, serif';
     sx.textAlign = 'center';
-    sx.fillText(['THE DUNES, AFTER MIDNIGHT', 'SHE IS STILL UP THERE', 'WE ARE STILL LISTENING'][motif], W / 2, H - 6);
+    sx.fillText(CAPTIONS[motif], W / 2, H - 6);
+    cv.setAttribute('aria-label', `Received picture: ${CAPTIONS[motif].toLowerCase()}.`);
 
     /* luma table for the audio */
     const img = sx.getImageData(0, 0, W, H).data;
@@ -1364,17 +1469,22 @@ LP.sstv = (() => {
   }
 
   /* ---------- the develop panel ---------- */
+  let _st = null;
+  const station = () => _st || (_st = LP.band.stations.find(s => s.type === 'sstv'));
   function update(t) {
-    const st = LP.band.stations.find(s => s.type === 'sstv');
+    const st = station();
     const off = LP.rx.vfo - st.f;
     const tuned = LP.rx.band === st.band && Math.abs(off) < 3.2;
     const prog = st.prog(t);
     const ix = Math.floor(t / st.PERIOD);
 
-    if (ix !== cycleIx) {
-      cycleIx = ix;
+    /* the picture only exists once someone actually tunes it in (lazy, and
+       deterministic anyway — the cycle index is the whole seed) */
+    if (tuned && ix !== genIx) {
+      genIx = ix;
       generate(ix);
       painted = 0;
+      announced = false;
       cx.fillStyle = '#060a08';
       cx.fillRect(0, 0, W, H);
     }
@@ -1382,7 +1492,17 @@ LP.sstv = (() => {
       lastSeen = t;
       const target = Math.floor(prog * H);
       const quality = LP.band.strength(st, t) * Math.exp(-(off * off) / 2.2);
-      while (painted < target) {
+      /* lines transmitted while you were away are GONE — mark them as static */
+      if (target - painted > 3) {
+        cx.fillStyle = '#0d120e';
+        cx.fillRect(0, painted, W, target - 2 - painted);
+        cx.globalAlpha = .5; cx.fillStyle = '#1a241c';
+        for (let n = 0; n < (target - painted) * 3; n++) cx.fillRect(Math.random() * W, painted + Math.random() * (target - 2 - painted), 3 + Math.random() * 10, 1);
+        cx.globalAlpha = 1;
+        painted = target - 2;
+      }
+      let budget = 16; /* the film develops; it never hitches a frame */
+      while (painted < target && budget-- > 0) {
         const y = painted;
         /* a badly tuned line comes in skewed and snowy */
         const skew = Math.round(off * 6 + (1 - quality) * (Math.random() * 8 - 4));
@@ -1395,6 +1515,14 @@ LP.sstv = (() => {
         }
         painted++;
       }
+      if (!announced && painted > 4) {
+        announced = true;
+        LP.say('A picture is developing on 9430.');
+      }
+      if (painted >= H - 1 && announced !== 'done') {
+        announced = 'done';
+        LP.say(`Picture received: ${CAPTIONS[genIx % 3].toLowerCase()}.`);
+      }
       /* the live scan line glows */
       cx.fillStyle = 'rgba(111,221,139,.8)';
       cx.fillRect(0, Math.min(H - 1, target), W, 1);
@@ -1405,8 +1533,12 @@ LP.sstv = (() => {
       pctEl.textContent = '';
       lastSeen = t;
     }
-    const open = t - lastSeen < 9000 && painted > 0;
-    panel.classList.toggle('open', open || (tuned && prog >= 0));
+    const open = (t - lastSeen < 9000 && painted > 0) || (tuned && prog >= 0);
+    if (open !== update._open) {
+      update._open = open;
+      if (open) { panel.hidden = false; requestAnimationFrame(() => panel.classList.add('open')); }
+      else { panel.classList.remove('open'); setTimeout(() => { if (!update._open) panel.hidden = true; }, 520); }
+    }
   }
 
   return { update, lumaAt };
@@ -1428,10 +1560,16 @@ LP.sstv = (() => {
   addEventListener('keydown', anyGesture, { capture: true });
 
   const saved = LP.store.get('rx', null);
-  const lastVfo = [3303.0, 6779.0, 9425.0];
+  const lastVfo = [3303.0, 6780.6, 9425.0];
   if (saved && typeof saved.band === 'number') {
-    LP.rx.band = LP.clamp(saved.band, 0, 2);
-    if (Array.isArray(saved.lastVfo)) for (let i = 0; i < 3; i++) lastVfo[i] = saved.lastVfo[i] || lastVfo[i];
+    LP.rx.band = LP.clamp(Math.round(saved.band), 0, 2);
+    if (Array.isArray(saved.lastVfo)) {
+      for (let i = 0; i < 3; i++) {
+        const B = LP.band.BANDS[i];
+        const v = Number(saved.lastVfo[i]);
+        if (Number.isFinite(v)) lastVfo[i] = LP.clamp(v, B.lo, B.hi); /* a poisoned store can't strand the VFO */
+      }
+    }
     LP.rx.vfo = lastVfo[LP.rx.band];
     reflectBand();
   }
@@ -1441,22 +1579,35 @@ LP.sstv = (() => {
     LP.store.set('rx', { band: LP.rx.band, lastVfo });
   }
 
+  function reflectDial() {
+    const B = LP.band.BANDS[LP.rx.band];
+    dial.setAttribute('aria-valuenow', String(Math.round(LP.rx.vfo - B.lo)));
+    const lock = LP.log && LP.log.lockedOn;
+    dial.setAttribute('aria-valuetext', `${LP.rx.vfo.toFixed(1)} kilohertz${lock ? ' — signal: ' + lock : ''}`);
+  }
+  LP.reflectDial = reflectDial;
+
   function tuneTo(f, coarse) {
     const B = LP.band.BANDS[LP.rx.band];
     LP.rx.vfo = LP.clamp(Math.round(f * 10) / 10, B.lo, B.hi);
     LP.rx.dwellT0 = performance.now();
-    dial.setAttribute('aria-valuenow', String(Math.round(LP.rx.vfo - B.lo)));
-    dial.setAttribute('aria-valuetext', `${LP.rx.vfo.toFixed(1)} kilohertz`);
+    reflectDial();
+    if (LP.display && LP.display.invalidateRow) LP.display.invalidateRow();
     LP.ticker.kick();
     clearTimeout(LP._tuneSayT);
-    if (!coarse) LP._tuneSayT = setTimeout(() => LP.say(`${LP.rx.vfo.toFixed(1)} kilohertz`), 700);
+    if (!coarse) LP._tuneSayT = setTimeout(() => LP.sayTune(`${LP.rx.vfo.toFixed(1)} kilohertz`), 700);
     clearTimeout(LP._persistT);
     LP._persistT = setTimeout(persist, 800);
   }
   LP.tuneTo = tuneTo;
+  reflectDial(); /* the slider tells the truth from the first Tab stop */
+
+  /* dwell is ATTENTIVE time: a hidden tab neither stalks nor is stalked */
+  document.addEventListener('visibilitychange', () => { LP.rx.dwellT0 = performance.now(); });
 
   function setBand(ix) {
     if (ix === LP.rx.band) return;
+    dialDrag = null; glassDrag = null; /* a band jump ends any drag in flight */
     lastVfo[LP.rx.band] = LP.rx.vfo;
     LP.rx.band = ix;
     reflectBand();
@@ -1469,20 +1620,21 @@ LP.sstv = (() => {
   }
   bands.forEach((b, i) => b.addEventListener('click', () => setBand(i)));
 
-  /* ---------- the dial strip ---------- */
+  /* ---------- the dial strip (one pointer owns a drag, start to finish) ---------- */
   let dialDrag = null;
   dial.addEventListener('pointerdown', (e) => {
+    if (dialDrag) return;
     e.preventDefault();
     dial.setPointerCapture(e.pointerId);
-    dialDrag = { x: e.clientX, vfo: LP.rx.vfo };
+    dialDrag = { id: e.pointerId, x: e.clientX, vfo: LP.rx.vfo };
     dial.focus();
   });
   dial.addEventListener('pointermove', (e) => {
-    if (!dialDrag) return;
+    if (!dialDrag || e.pointerId !== dialDrag.id) return;
     const dx = e.clientX - dialDrag.x;
     tuneTo(dialDrag.vfo + dx * 0.12, true);
   });
-  const dialUp = () => { dialDrag = null; };
+  const dialUp = (e) => { if (dialDrag && e.pointerId === dialDrag.id) dialDrag = null; };
   dial.addEventListener('pointerup', dialUp);
   dial.addEventListener('pointercancel', dialUp);
   dial.addEventListener('lostpointercapture', dialUp);
@@ -1506,6 +1658,7 @@ LP.sstv = (() => {
   /* ---------- the glass: grab the spectrum itself ---------- */
   let glassDrag = null;
   glass.addEventListener('pointerdown', (e) => {
+    if (glassDrag) return;
     const r = glass.getBoundingClientRect();
     const yFrac = (e.clientY - r.top) / r.height;
     if (yFrac < 0.08) {
@@ -1516,14 +1669,14 @@ LP.sstv = (() => {
     }
     e.preventDefault();
     glass.setPointerCapture(e.pointerId);
-    glassDrag = { x: e.clientX, vfo: LP.rx.vfo, w: r.width };
+    glassDrag = { id: e.pointerId, x: e.clientX, vfo: LP.rx.vfo, w: r.width };
   });
   glass.addEventListener('pointermove', (e) => {
-    if (!glassDrag) return;
+    if (!glassDrag || e.pointerId !== glassDrag.id) return;
     const dx = e.clientX - glassDrag.x;
     tuneTo(glassDrag.vfo - dx * (LP.display.WIN / glassDrag.w), true);
   });
-  const glassUp = () => { glassDrag = null; };
+  const glassUp = (e) => { if (glassDrag && e.pointerId === glassDrag.id) glassDrag = null; };
   glass.addEventListener('pointerup', glassUp);
   glass.addEventListener('pointercancel', glassUp);
 
@@ -1540,18 +1693,27 @@ LP.sstv = (() => {
   function toggleLog(force) {
     const book = document.getElementById('logbook');
     const open = force !== undefined ? force : book.hidden;
-    book.hidden = !open;
-    requestAnimationFrame(() => book.classList.toggle('open', open));
-    logBtn.setAttribute('aria-pressed', String(open));
-    if (open) LP.log.render();
+    if (open) {
+      book.hidden = false;
+      requestAnimationFrame(() => book.classList.add('open'));
+      LP.log.render();
+      LP.say(`Station log open — ${LP.log.entries.length} ${LP.log.entries.length === 1 ? 'entry' : 'entries'}.`);
+    } else {
+      book.classList.remove('open');
+      setTimeout(() => { if (!book.classList.contains('open')) book.hidden = true; }, 520);
+      LP.say('Station log closed.');
+    }
+    logBtn.setAttribute('aria-expanded', String(open));
   }
   logBtn.addEventListener('click', () => toggleLog());
   LP.toggleLog = toggleLog;
 
   /* ---------- bare keys ---------- */
   addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !document.getElementById('logbook').hidden) { toggleLog(false); return; }
     if (e.target instanceof HTMLElement && ['BUTTON', 'INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
     if (e.target === dial) return; /* the dial has its own map */
+    if (dialDrag || glassDrag) return; /* no band jumps mid-drag */
     switch (e.key) {
       case 'ArrowLeft': tuneTo(LP.rx.vfo - 0.1); break;
       case 'ArrowRight': tuneTo(LP.rx.vfo + 0.1); break;
@@ -1573,7 +1735,15 @@ LP.sstv = (() => {
    station keys the same three characters at the same moment — the net
    acknowledging a new listener. */
 LP.log = (() => {
-  const entries = LP.store.get('log', []);
+  /* one poisoned localStorage entry must never kill the receiver */
+  const raw = LP.store.get('log', []);
+  const entries = (Array.isArray(raw) ? raw : [])
+    .filter(e => e && typeof e.id === 'string')
+    .map(e => ({
+      id: e.id, f: Number.isFinite(Number(e.f)) ? Number(e.f) : 0,
+      note: typeof e.note === 'string' ? e.note : '',
+      at: typeof e.at === 'string' ? e.at : '', cls: typeof e.cls === 'string' ? e.cls : '',
+    }));
   const list = document.getElementById('log-list');
   const seen = new Set(entries.map(e => e.id));
   let netDone = LP.store.get('net', false);
@@ -1613,19 +1783,21 @@ LP.log = (() => {
     }
   }
 
-  /* the net: seven names in the book and the band answers, once */
+  /* the net: seven names in the book and the band answers — once, from the top */
   function maybeNet() {
     if (netDone) return;
     const core = entries.filter(e => e.id !== 'ALL STATIONS').length;
     if (core >= 7) {
       netDone = true;
       LP.store.set('net', true);
-      LP.band.net.until = Date.now() + 26000;
+      LP.band.net.arm();
       setTimeout(() => {
         add('ALL STATIONS', 0, 'the net acknowledged you', 'net');
       }, 9000);
     }
   }
+  /* a reload inside the 9s window must not eat the capstone entry */
+  if (netDone && !seen.has('ALL STATIONS')) add('ALL STATIONS', 0, 'the net acknowledged you', 'net');
 
   /* lock detection: near a station's carrier, signal present, held ~4s */
   function check(t) {
@@ -1650,11 +1822,17 @@ LP.log = (() => {
       add('THE OTHER', gh.f, 'it asked who was there', 'net');
       gh.heard = true;
     }
-    LP.log.lockedOn = candidate ? candidate.id : null;
+    lastCheckT = t;
   }
 
+  let lastCheckT = 0;
   render();
-  return { has, add, check, render, get lockedOn() { return lockedOn && lockedOn.id; }, set lockedOn(v) { }, entries };
+  return {
+    has, add, check, render, entries,
+    /* the lock light means SIGNAL, not proximity: a station in its dead
+       window doesn't light the readout */
+    get lockedOn() { return (lockedOn && lastCheckT - lastActive < 3000) ? lockedOn.id : null; },
+  };
 })();
 
 
@@ -1671,6 +1849,24 @@ LP.log = (() => {
 
     if (!LP.rm.matches) {
       setTimeout(() => document.body.classList.remove('arriving'), 900);
+      /* first visit only: the set glides the last nudge into the music —
+         the dial teaches itself, no words needed */
+      if (!LP.store.get('visited', false)) {
+        LP.store.set('visited', true);
+        const from = LP.rx.vfo - 9, to = LP.rx.vfo;
+        const t0 = performance.now();
+        const glide = () => {
+          const p = Math.min(1, (performance.now() - t0) / 2600);
+          LP.rx.vfo = from + (to - from) * (1 - Math.pow(1 - p, 3));
+          if (LP.display.invalidateRow) LP.display.invalidateRow();
+          if (p < 1) return; /* stay in the ticker till landed */
+          LP.rx.dwellT0 = performance.now();
+          if (LP.reflectDial) LP.reflectDial();
+          return false;
+        };
+        LP.rx.vfo = from;
+        LP.ticker.add(glide);
+      }
     }
 
     setTimeout(() => {

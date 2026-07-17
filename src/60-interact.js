@@ -13,10 +13,16 @@
   addEventListener('keydown', anyGesture, { capture: true });
 
   const saved = LP.store.get('rx', null);
-  const lastVfo = [3303.0, 6779.0, 9425.0];
+  const lastVfo = [3303.0, 6780.6, 9425.0];
   if (saved && typeof saved.band === 'number') {
-    LP.rx.band = LP.clamp(saved.band, 0, 2);
-    if (Array.isArray(saved.lastVfo)) for (let i = 0; i < 3; i++) lastVfo[i] = saved.lastVfo[i] || lastVfo[i];
+    LP.rx.band = LP.clamp(Math.round(saved.band), 0, 2);
+    if (Array.isArray(saved.lastVfo)) {
+      for (let i = 0; i < 3; i++) {
+        const B = LP.band.BANDS[i];
+        const v = Number(saved.lastVfo[i]);
+        if (Number.isFinite(v)) lastVfo[i] = LP.clamp(v, B.lo, B.hi); /* a poisoned store can't strand the VFO */
+      }
+    }
     LP.rx.vfo = lastVfo[LP.rx.band];
     reflectBand();
   }
@@ -26,22 +32,35 @@
     LP.store.set('rx', { band: LP.rx.band, lastVfo });
   }
 
+  function reflectDial() {
+    const B = LP.band.BANDS[LP.rx.band];
+    dial.setAttribute('aria-valuenow', String(Math.round(LP.rx.vfo - B.lo)));
+    const lock = LP.log && LP.log.lockedOn;
+    dial.setAttribute('aria-valuetext', `${LP.rx.vfo.toFixed(1)} kilohertz${lock ? ' — signal: ' + lock : ''}`);
+  }
+  LP.reflectDial = reflectDial;
+
   function tuneTo(f, coarse) {
     const B = LP.band.BANDS[LP.rx.band];
     LP.rx.vfo = LP.clamp(Math.round(f * 10) / 10, B.lo, B.hi);
     LP.rx.dwellT0 = performance.now();
-    dial.setAttribute('aria-valuenow', String(Math.round(LP.rx.vfo - B.lo)));
-    dial.setAttribute('aria-valuetext', `${LP.rx.vfo.toFixed(1)} kilohertz`);
+    reflectDial();
+    if (LP.display && LP.display.invalidateRow) LP.display.invalidateRow();
     LP.ticker.kick();
     clearTimeout(LP._tuneSayT);
-    if (!coarse) LP._tuneSayT = setTimeout(() => LP.say(`${LP.rx.vfo.toFixed(1)} kilohertz`), 700);
+    if (!coarse) LP._tuneSayT = setTimeout(() => LP.sayTune(`${LP.rx.vfo.toFixed(1)} kilohertz`), 700);
     clearTimeout(LP._persistT);
     LP._persistT = setTimeout(persist, 800);
   }
   LP.tuneTo = tuneTo;
+  reflectDial(); /* the slider tells the truth from the first Tab stop */
+
+  /* dwell is ATTENTIVE time: a hidden tab neither stalks nor is stalked */
+  document.addEventListener('visibilitychange', () => { LP.rx.dwellT0 = performance.now(); });
 
   function setBand(ix) {
     if (ix === LP.rx.band) return;
+    dialDrag = null; glassDrag = null; /* a band jump ends any drag in flight */
     lastVfo[LP.rx.band] = LP.rx.vfo;
     LP.rx.band = ix;
     reflectBand();
@@ -54,20 +73,21 @@
   }
   bands.forEach((b, i) => b.addEventListener('click', () => setBand(i)));
 
-  /* ---------- the dial strip ---------- */
+  /* ---------- the dial strip (one pointer owns a drag, start to finish) ---------- */
   let dialDrag = null;
   dial.addEventListener('pointerdown', (e) => {
+    if (dialDrag) return;
     e.preventDefault();
     dial.setPointerCapture(e.pointerId);
-    dialDrag = { x: e.clientX, vfo: LP.rx.vfo };
+    dialDrag = { id: e.pointerId, x: e.clientX, vfo: LP.rx.vfo };
     dial.focus();
   });
   dial.addEventListener('pointermove', (e) => {
-    if (!dialDrag) return;
+    if (!dialDrag || e.pointerId !== dialDrag.id) return;
     const dx = e.clientX - dialDrag.x;
     tuneTo(dialDrag.vfo + dx * 0.12, true);
   });
-  const dialUp = () => { dialDrag = null; };
+  const dialUp = (e) => { if (dialDrag && e.pointerId === dialDrag.id) dialDrag = null; };
   dial.addEventListener('pointerup', dialUp);
   dial.addEventListener('pointercancel', dialUp);
   dial.addEventListener('lostpointercapture', dialUp);
@@ -91,6 +111,7 @@
   /* ---------- the glass: grab the spectrum itself ---------- */
   let glassDrag = null;
   glass.addEventListener('pointerdown', (e) => {
+    if (glassDrag) return;
     const r = glass.getBoundingClientRect();
     const yFrac = (e.clientY - r.top) / r.height;
     if (yFrac < 0.08) {
@@ -101,14 +122,14 @@
     }
     e.preventDefault();
     glass.setPointerCapture(e.pointerId);
-    glassDrag = { x: e.clientX, vfo: LP.rx.vfo, w: r.width };
+    glassDrag = { id: e.pointerId, x: e.clientX, vfo: LP.rx.vfo, w: r.width };
   });
   glass.addEventListener('pointermove', (e) => {
-    if (!glassDrag) return;
+    if (!glassDrag || e.pointerId !== glassDrag.id) return;
     const dx = e.clientX - glassDrag.x;
     tuneTo(glassDrag.vfo - dx * (LP.display.WIN / glassDrag.w), true);
   });
-  const glassUp = () => { glassDrag = null; };
+  const glassUp = (e) => { if (glassDrag && e.pointerId === glassDrag.id) glassDrag = null; };
   glass.addEventListener('pointerup', glassUp);
   glass.addEventListener('pointercancel', glassUp);
 
@@ -125,18 +146,27 @@
   function toggleLog(force) {
     const book = document.getElementById('logbook');
     const open = force !== undefined ? force : book.hidden;
-    book.hidden = !open;
-    requestAnimationFrame(() => book.classList.toggle('open', open));
-    logBtn.setAttribute('aria-pressed', String(open));
-    if (open) LP.log.render();
+    if (open) {
+      book.hidden = false;
+      requestAnimationFrame(() => book.classList.add('open'));
+      LP.log.render();
+      LP.say(`Station log open — ${LP.log.entries.length} ${LP.log.entries.length === 1 ? 'entry' : 'entries'}.`);
+    } else {
+      book.classList.remove('open');
+      setTimeout(() => { if (!book.classList.contains('open')) book.hidden = true; }, 520);
+      LP.say('Station log closed.');
+    }
+    logBtn.setAttribute('aria-expanded', String(open));
   }
   logBtn.addEventListener('click', () => toggleLog());
   LP.toggleLog = toggleLog;
 
   /* ---------- bare keys ---------- */
   addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !document.getElementById('logbook').hidden) { toggleLog(false); return; }
     if (e.target instanceof HTMLElement && ['BUTTON', 'INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
     if (e.target === dial) return; /* the dial has its own map */
+    if (dialDrag || glassDrag) return; /* no band jumps mid-drag */
     switch (e.key) {
       case 'ArrowLeft': tuneTo(LP.rx.vfo - 0.1); break;
       case 'ArrowRight': tuneTo(LP.rx.vfo + 0.1); break;
