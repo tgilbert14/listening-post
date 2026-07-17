@@ -1095,7 +1095,6 @@ LP.display = (() => {
 
     /* ribbon: full band + logged pencil ticks + the cursor */
     if (ribbonImg) {
-      const tmp = document.createElement('canvas'); /* cached below after first use */
       cx.imageSmoothingEnabled = false;
       if (!draw._rb) { draw._rb = document.createElement('canvas'); draw._rb.width = COLS; draw._rb.height = 1; }
       draw._rb.getContext('2d').putImageData(ribbonImg, 0, 0);
