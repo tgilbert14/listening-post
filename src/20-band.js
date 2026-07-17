@@ -125,8 +125,8 @@ LP.band = (() => {
     activity(t) { const p = this.phase(t); return p.on ? 1 : (p.mode === 'gap' ? 0 : 0.12); },
   });
 
-  /* THE FORECAST: RTTY, 45 baud FSK. The decoded text is the only prose
-     the fiction allows itself — a desert shipping forecast. */
+  /* THE FORECAST: RTTY, 45 baud FSK. Lock it and the masthead's sub-line
+     becomes the decoder, typing out a desert shipping forecast. */
   S.push({
     id: 'THE FORECAST', name: 'THE FORECAST', f: 3388.0, band: 0, type: 'rtty', bw: 0.45,
     note: 'the weather for places without weather stations',

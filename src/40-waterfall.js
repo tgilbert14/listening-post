@@ -172,6 +172,28 @@ LP.display = (() => {
     mx.stroke();
   }
 
+  /* ---------- the RTTY decoder: the sub-line types what THE FORECAST sends ---------- */
+  let lastDecode = 0, decoding = false;
+  function decodeTicker(t) {
+    if (t - lastDecode < 160) return;
+    lastDecode = t;
+    const subEl = document.getElementById('sub-line');
+    if (!subEl) return;
+    if (LP.log.lockedOn === 'THE FORECAST') {
+      const st = LP.band.stations.find(s => s.type === 'rtty');
+      const m = t % 34000;
+      if (m < 30000) {
+        const n = Math.floor(m / 1000 * 6);
+        const txt = st.text;
+        const from = Math.max(0, n - 42);
+        subEl.textContent = txt.slice(from, n % (txt.length + 1)) || '·';
+        decoding = true;
+        return;
+      }
+    }
+    if (decoding) { decoding = false; subEl.textContent = 'The band is open'; }
+  }
+
   /* ---------- readout ---------- */
   let lastShown = '', lastLock = null;
   function readout() {
@@ -245,6 +267,7 @@ LP.display = (() => {
     }
     drawMeter(dt);
     readout();
+    decodeTicker(t);
   }
 
   function invalidateRow() { lastRow = 0; dirty = true; }
