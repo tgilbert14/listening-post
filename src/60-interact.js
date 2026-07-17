@@ -76,6 +76,7 @@
   /* ---------- the dial strip (one pointer owns a drag, start to finish) ---------- */
   let dialDrag = null;
   dial.addEventListener('pointerdown', (e) => {
+    if (LP.dismissCardSoft) LP.dismissCardSoft(); /* hands on the dial: the card bows out */
     if (dialDrag) return;
     e.preventDefault();
     dial.setPointerCapture(e.pointerId);
@@ -111,6 +112,7 @@
   /* ---------- the glass: grab the spectrum itself ---------- */
   let glassDrag = null;
   glass.addEventListener('pointerdown', (e) => {
+    if (LP.dismissCardSoft) LP.dismissCardSoft();
     if (glassDrag) return;
     const r = glass.getBoundingClientRect();
     const yFrac = (e.clientY - r.top) / r.height;
@@ -137,6 +139,7 @@
   for (const el of [glass, dial]) {
     el.addEventListener('wheel', (e) => {
       e.preventDefault();
+      if (LP.dismissCardSoft) LP.dismissCardSoft();
       const step = e.shiftKey ? 1 : 0.1;
       tuneTo(LP.rx.vfo + (e.deltaY > 0 ? -step : step));
     }, { passive: false });
@@ -161,15 +164,19 @@
   logBtn.addEventListener('click', () => toggleLog());
   LP.toggleLog = toggleLog;
 
-  /* ---------- the operator's card ---------- */
+  /* ---------- the operator's card: docked, never a wall ---------- */
   const cardBtn = document.getElementById('card-toggle');
   const card = document.getElementById('opcard');
   const cardClose = document.getElementById('card-close');
-  function showCard(open) {
+  let cardAuto = false;
+  function showCard(open, stealFocus = true) {
     card.hidden = !open;
     cardBtn.setAttribute('aria-expanded', String(open));
-    if (open) cardClose.focus();
+    cardAuto = open && !stealFocus;
+    if (open && stealFocus) cardClose.focus();
   }
+  /* the card excuses itself the moment you start operating the set */
+  LP.dismissCardSoft = () => { if (cardAuto && !card.hidden) showCard(false, false); };
   cardBtn.addEventListener('click', () => showCard(card.hidden));
   cardClose.addEventListener('click', () => showCard(false));
   LP.showCard = showCard;

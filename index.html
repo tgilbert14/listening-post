@@ -290,15 +290,32 @@ button.chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px
 .logbook li.net .id { color: var(--phos-bright); }
 
 /* ---- the operator's card: what this thing IS, in the operator's hand ---- */
+/* the operator's card DOCKS beside the glass — the band stays open and
+   tunable while you read. No scrim, no wall. */
 .opcard {
-  position: fixed; inset: 0; z-index: 45;
-  display: grid; place-items: center;
-  background: rgba(3,6,5,.72);
-  backdrop-filter: blur(3px);
-  padding: 4vmin;
+  position: fixed; z-index: 35;
+  right: max(2vw, calc((100vw - 1180px) / 2));
+  top: 84px;
+  max-height: min(74vh, 620px);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.opcard .qsl { animation: qslIn .45s cubic-bezier(.2,.9,.25,1); }
+@keyframes qslIn {
+  from { opacity: 0; transform: translateX(26px) rotate(-.5deg); }
+  to   { opacity: 1; transform: rotate(-.5deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .opcard .qsl { animation: none; }
+}
+@media (max-width: 900px) {
+  .opcard {
+    left: 8px; right: 8px; top: auto; bottom: 8px;
+    max-height: 48vh; /* the glass keeps breathing above the card */
+  }
 }
 .qsl {
-  width: min(460px, 92vw);
+  width: min(350px, calc(100vw - 20px));
   background-color: #e7dfc9;
   background-image:
     repeating-linear-gradient(0deg, transparent 0 26px, rgba(88,80,60,.07) 26px 27px),
@@ -1784,6 +1801,7 @@ LP.sstv = (() => {
   /* ---------- the dial strip (one pointer owns a drag, start to finish) ---------- */
   let dialDrag = null;
   dial.addEventListener('pointerdown', (e) => {
+    if (LP.dismissCardSoft) LP.dismissCardSoft(); /* hands on the dial: the card bows out */
     if (dialDrag) return;
     e.preventDefault();
     dial.setPointerCapture(e.pointerId);
@@ -1819,6 +1837,7 @@ LP.sstv = (() => {
   /* ---------- the glass: grab the spectrum itself ---------- */
   let glassDrag = null;
   glass.addEventListener('pointerdown', (e) => {
+    if (LP.dismissCardSoft) LP.dismissCardSoft();
     if (glassDrag) return;
     const r = glass.getBoundingClientRect();
     const yFrac = (e.clientY - r.top) / r.height;
@@ -1845,6 +1864,7 @@ LP.sstv = (() => {
   for (const el of [glass, dial]) {
     el.addEventListener('wheel', (e) => {
       e.preventDefault();
+      if (LP.dismissCardSoft) LP.dismissCardSoft();
       const step = e.shiftKey ? 1 : 0.1;
       tuneTo(LP.rx.vfo + (e.deltaY > 0 ? -step : step));
     }, { passive: false });
@@ -1869,15 +1889,19 @@ LP.sstv = (() => {
   logBtn.addEventListener('click', () => toggleLog());
   LP.toggleLog = toggleLog;
 
-  /* ---------- the operator's card ---------- */
+  /* ---------- the operator's card: docked, never a wall ---------- */
   const cardBtn = document.getElementById('card-toggle');
   const card = document.getElementById('opcard');
   const cardClose = document.getElementById('card-close');
-  function showCard(open) {
+  let cardAuto = false;
+  function showCard(open, stealFocus = true) {
     card.hidden = !open;
     cardBtn.setAttribute('aria-expanded', String(open));
-    if (open) cardClose.focus();
+    cardAuto = open && !stealFocus;
+    if (open && stealFocus) cardClose.focus();
   }
+  /* the card excuses itself the moment you start operating the set */
+  LP.dismissCardSoft = () => { if (cardAuto && !card.hidden) showCard(false, false); };
   cardBtn.addEventListener('click', () => showCard(card.hidden));
   cardClose.addEventListener('click', () => showCard(false));
   LP.showCard = showCard;
@@ -2027,7 +2051,7 @@ LP.log = (() => {
          set glides the last nudge into the music — the dial teaches itself */
       if (!LP.store.get('visited', false)) {
         LP.store.set('visited', true);
-        setTimeout(() => { if (LP.showCard) LP.showCard(true); }, 1200);
+        setTimeout(() => { if (LP.showCard) LP.showCard(true, false); }, 1200);
         const from = LP.rx.vfo - 9, to = LP.rx.vfo;
         const t0 = performance.now();
         const glide = () => {

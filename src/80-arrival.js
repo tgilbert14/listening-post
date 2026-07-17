@@ -15,7 +15,7 @@
          set glides the last nudge into the music — the dial teaches itself */
       if (!LP.store.get('visited', false)) {
         LP.store.set('visited', true);
-        setTimeout(() => { if (LP.showCard) LP.showCard(true); }, 1200);
+        setTimeout(() => { if (LP.showCard) LP.showCard(true, false); }, 1200);
         const from = LP.rx.vfo - 9, to = LP.rx.vfo;
         const t0 = performance.now();
         const glide = () => {
