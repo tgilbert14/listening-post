@@ -359,6 +359,20 @@ input.vol:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; 
 .masthead, .panel, .glass { opacity: 1; transition: opacity 1.4s ease; }
 body.arriving .masthead, body.arriving .panel { opacity: 0; }
 
+/* ---- the workshop bar (?dev only) ---- */
+.devbar {
+  position: fixed; left: 10px; bottom: 10px; z-index: 70;
+  display: flex; gap: 10px; align-items: center;
+  font: 10px var(--mono); letter-spacing: .12em;
+  color: var(--amber);
+  background: #101413ee;
+  border: 1px dashed var(--amber);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+.devbar input { width: 180px; accent-color: var(--amber); }
+.devbar #dev-flags { color: var(--pencil); }
+
 /* ---- noscript brochure ---- */
 .brochure {
   position: fixed; inset: 0; z-index: 40;

@@ -47,6 +47,42 @@
     if ('serviceWorker' in navigator && location.protocol === 'https:') {
       navigator.serviceWorker.register('./sw.js').catch(() => { });
     }
+
+    /* ---- the workshop door: ?dev exposes a clock you can turn ---- */
+    /* Night-only stations, storm nights, echo nights — none of it is
+       humanly testable at 2 PM without this. Real listeners never see it. */
+    if (/[?&]dev\b/.test(location.search)) {
+      const bar = document.createElement('div');
+      bar.className = 'devbar';
+      bar.innerHTML = '<label>WARP <input id="dev-warp" type="range" min="-1440" max="1440" step="5" value="0" aria-label="Clock warp, minutes"></label>'
+        + '<span id="dev-clock"></span><span id="dev-flags"></span>';
+      document.body.appendChild(bar);
+      const warp = bar.querySelector('#dev-warp');
+      const clock = bar.querySelector('#dev-clock');
+      const flags = bar.querySelector('#dev-flags');
+      const p2 = (n) => String(n).padStart(2, '0');
+      const reflect = () => {
+        LP.warp = warp.value * 60000;
+        const d = LP.date(), t = LP.now(), B = LP.band;
+        const on = (id) => { const s = B.stations.find(x => x.id === id); return s && (!s.isOn || s.isOn()); };
+        clock.textContent = ` ${p2(d.getHours())}:${p2(d.getMinutes())} `;
+        flags.textContent = [
+          'K' + B.weather.k(),
+          B.weather.sid(t) > 0 ? 'SID' : '',
+          B.weather.esOpen(t) ? 'Es' : '',
+          B.jammerToday() ? 'JAM' : '',
+          B.lde.night() ? 'LDE' : '',
+          on('THE CROSSING') ? 'XING' : '',
+          on('HOMECOMING') ? 'HOME' : '',
+          B.stations.some(s => s.type === 'pips' && s.failNight()) ? 'PIPFAIL' : '',
+        ].filter(Boolean).join(' ');
+        if (LP.display.invalidateRow) LP.display.invalidateRow();
+        LP.ticker.kick();
+      };
+      warp.addEventListener('input', reflect);
+      setInterval(reflect, 2000);
+      reflect();
+    }
   } catch (err) {
     console.error(err);
     const p = document.createElement('p');

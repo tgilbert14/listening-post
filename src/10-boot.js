@@ -11,6 +11,14 @@ LP.store = {
 LP.rm = matchMedia('(prefers-reduced-motion: reduce)');
 LP.DPR = () => Math.min(devicePixelRatio || 1, 2);
 
+/* THE CLOCK. All station traffic reads the wall through these two, so the
+   ?dev workshop can turn the hands and audition midnight at noon. LP.warp
+   stays 0 for every real listener. (The underbrush seeds once at load and
+   ignores a mid-session warp across midnight — a known, harmless limit.) */
+LP.warp = 0;
+LP.now = () => Date.now() + LP.warp;
+LP.date = (t) => new Date(t === undefined ? LP.now() : t);
+
 LP.ticker = (() => {
   const tasks = new Set();
   let rafId = null, last = 0, inFrame = false;

@@ -19,9 +19,10 @@ empty hall. The traffic runs on the wall clock whether anyone is listening or no
 - **THE LATTICE** — a buzzer that reads five groups of five in tone-digits; the groups change daily
 - **THE FORECAST** — 45-baud RTTY carrying the weather for places without weather stations
 - **AURORA** — someone, somewhere, is playing records through 2,000 miles of ionosphere
-- **POSTCARD** — an SSTV station: every six minutes, a new procedurally-drawn picture, painted
-  thirty-two lines at a time; tune it badly and the lines come in skewed and snowy. Sit with one
-  to the end and the finished card is **pinned into your log** as a keepsake
+- **POSTCARD** — an SSTV station transmitting **real Robot 36**: a VIS header, then 240 scan
+  lines of sync, luma, and chroma, every six minutes. Point a phone running an SSTV decoder at
+  the speaker and see what develops. Tune it badly and the picture pays for it. Sit with one to
+  the end and the finished card is **pinned into your log** as a keepsake
 - **HOMECOMING** — eleven tones, only transmitted after dark, your local dark
 - **THE CROSSING** — some nights, a bell far away over 6660. About one night in four, seeded by
   the date. Hearing it at all is the event

@@ -53,7 +53,7 @@ LP.log = (() => {
   function add(id, f, note, cls, report) {
     if (seen.has(id)) return;
     seen.add(id);
-    const d = new Date();
+    const d = LP.date();
     const e = {
       id, f, band: bandName(), note: note || '',
       at: `${pad2(d.getHours())}:${pad2(d.getMinutes())}`,
@@ -135,7 +135,7 @@ LP.log = (() => {
   /* ADIF — the real amateur-log interchange format; any ham logger opens it */
   function exportAdif() {
     const field = (k, v) => `<${k}:${String(v).length}>${v}`;
-    const d = new Date();
+    const d = LP.date();
     const today = `${d.getUTCFullYear()}${pad2(d.getUTCMonth() + 1)}${pad2(d.getUTCDate())}`;
     let out = 'The Listening Post station log\n<ADIF_VER:5>3.1.4<PROGRAMID:18>THE LISTENING POST<EOH>\n';
     for (const e of entries) {
@@ -168,7 +168,7 @@ LP.log = (() => {
     x.fillRect(44, 76, W - 88, 3);
     x.font = 'italic 15px Georgia, serif'; x.fillStyle = '#6a746c';
     x.textAlign = 'right';
-    const d = new Date();
+    const d = LP.date();
     x.fillText(`${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())} · heard on a desert receiver`, W - 44, 62);
     x.textAlign = 'left';
     x.font = '17px Consolas, monospace';

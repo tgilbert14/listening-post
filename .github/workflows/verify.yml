@@ -28,3 +28,5 @@ jobs:
         run: node tests/verify-phase1.js
       - name: Phase 2 suite
         run: node tests/verify-phase2.js
+      - name: Phase 3 suite
+        run: node tests/verify-phase3.js
