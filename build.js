@@ -49,6 +49,7 @@ const page = `<!doctype html>
 <meta name="twitter:image:alt" content="A phosphor-green spectrum waterfall at zero-beat on AURORA, lightning crashes across the band.">
 <meta name="theme-color" content="#050807">
 <link rel="canonical" href="https://tgilbert14.github.io/listening-post/">
+<link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='6' y='22' width='52' height='30' rx='4' fill='none' stroke='%236fdd8b' stroke-width='4'/%3E%3Cpath d='M14 36 h6 M26 36 h10 M42 36 h8' stroke='%236fdd8b' stroke-width='4' stroke-linecap='round'/%3E%3Cpath d='M32 22 L48 8' stroke='%23d9a441' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
 <style>
 ${css}

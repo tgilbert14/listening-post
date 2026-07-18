@@ -41,6 +41,12 @@
     setTimeout(() => {
       LP.say(`A shortwave receiver, three bands. Arrow keys tune; 1, 2, 3 change band; L opens the station log. Currently ${landing.toFixed(1)} kilohertz.`);
     }, 1400);
+
+    /* installable: the set becomes a bedside object. https only — file: and
+       exotic contexts just stay a page, silently. */
+    if ('serviceWorker' in navigator && location.protocol === 'https:') {
+      navigator.serviceWorker.register('./sw.js').catch(() => { });
+    }
   } catch (err) {
     console.error(err);
     const p = document.createElement('p');

@@ -34,6 +34,7 @@
       <button class="chip" id="log-toggle" disabled aria-expanded="false" aria-controls="logbook">Log</button>
       <button class="chip" id="card-toggle" disabled aria-expanded="false" aria-controls="opcard">Card</button>
       <button class="chip" id="sound-toggle" disabled aria-pressed="false">Sound</button>
+      <input class="vol" id="vol" type="range" min="0" max="100" value="85" aria-label="Volume">
     </div>
   </div>
 
@@ -60,6 +61,10 @@
 
   <aside class="logbook" id="logbook" aria-label="Station log" hidden>
     <h2>Station Log</h2>
+    <div class="log-actions">
+      <button class="chip" id="log-adif">ADIF</button>
+      <button class="chip" id="log-qsl">QSL card</button>
+    </div>
     <ol id="log-list"></ol>
   </aside>
 

@@ -188,6 +188,22 @@ button.chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px
 /* S-meter */
 #smeter { width: 132px; height: 46px; display: block; margin-left: auto; }
 
+/* the volume knob */
+input.vol {
+  width: 100%; height: 18px; margin: 0;
+  accent-color: var(--amber);
+  background: transparent;
+  cursor: ew-resize;
+}
+input.vol:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* log keepsake actions + retunable entries */
+.log-actions { display: flex; gap: 6px; margin-bottom: 8px; }
+.log-actions .chip { padding: 6px 10px 5px; font-size: 9px; }
+.logbook li.jump { cursor: pointer; }
+.logbook li.jump:hover .id, .logbook li.jump:focus-visible .id { color: var(--phos-bright); }
+.logbook li.jump:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+
 /* ---- SSTV develop panel ---- */
 .develop {
   position: fixed;

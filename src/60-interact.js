@@ -74,7 +74,11 @@
     if (LP.display && LP.display.invalidateRow) LP.display.invalidateRow();
     LP.ticker.kick();
     clearTimeout(LP._tuneSayT);
-    if (!coarse) LP._tuneSayT = setTimeout(() => LP.sayTune(`${LP.rx.vfo.toFixed(1)} kilohertz`), 700);
+    /* the non-visual hunt: a settled dial reports whether something is here */
+    if (!coarse) LP._tuneSayT = setTimeout(() => {
+      const hot = LP.audio && LP.audio.smeter > 0.3;
+      LP.sayTune(`${LP.rx.vfo.toFixed(1)} kilohertz${hot ? ' — signal here' : ''}`);
+    }, 700);
     clearTimeout(LP._persistT);
     LP._persistT = setTimeout(persist, 800);
   }
@@ -93,10 +97,12 @@
     LP.rx.band = ix;
     reflectBand();
     if (LP.relayClunk) LP.relayClunk();   /* the band switch throws a relay */
+    if (navigator.vibrate) navigator.vibrate(8); /* and the chassis feels it */
     tuneTo(lastVfo[ix], true);
     LP.say(`Band ${LP.band.BANDS[ix].name.toLowerCase()}, ${LP.rx.vfo.toFixed(1)} kilohertz.`);
     persist();
   }
+  LP.setBand = setBand;
   function reflectBand() {
     bands.forEach((b, i) => b.setAttribute('aria-pressed', String(i === LP.rx.band)));
   }

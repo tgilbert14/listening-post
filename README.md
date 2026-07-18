@@ -25,13 +25,19 @@ empty hall. The traffic runs on the wall clock whether anyone is listening or no
 - **HOMECOMING** — eleven tones, only transmitted after dark, your local dark
 - **THE CROSSING** — some nights, a bell far away over 6660. About one night in four, seeded by
   the date. Hearing it at all is the event
+- **THE PIPS** — a time station: five short, one long, on the minute, every minute, forever
 - and if you hold a quiet frequency long enough, something notices. It drifts toward your dial,
   falls to zero-beat, and asks who was there. Once.
 
 Some listeners keep further notes: a weak signal that never fades while everything around it
 breathes; a room faintly audible behind the buzzer; a station that once keyed its sister's name;
-morse hands that wobble like hands — and one that doesn't. None of this is announced, none of it
-is explained, and all of it ends. Watch the needle.
+morse hands that wobble like hands — and one that doesn't. Some days the numbers arrive two
+kilohertz high, shouldering past a wall of rasp that wasn't there yesterday. Some nights, the
+same night for every listener on Earth, a stranger crosses the sky and is gone by morning. And
+a few keep notes they don't show anyone: a band that repeats what it just heard, seconds late
+and a shade low; a mayday that stops sounding like one if you stay; breathing where only
+machines should be. None of this is announced, none of it is explained, and all of it ends.
+Watch the needle.
 
 **Zoom** the window from 48 kHz down to 12 kHz and the keying resolves in the raster — dits and
 dahs become individually legible. The **dial has mass**: fling it and the weighted flywheel coasts,
@@ -39,7 +45,9 @@ shedding speed against friction. Switching bands throws a **relay** you can hear
 
 Hold a named signal and it gets pencilled into the **station log** the way an operator keeps one —
 UTC timestamp, band, and a signal report in RST computed from what the set is actually hearing
-(the book survives the night). Log enough of the band and, once, every station keys the same three
+(the book survives the night). Click a pencilled line to **retune straight back to it**. The log
+exports as **ADIF** — the real amateur-radio interchange format, openable in any ham logger — or
+as a **QSL card** image. Log enough of the band and, once, every station keys the same three
 characters at the same moment — the net acknowledging a new listener.
 
 **Live:** https://tgilbert14.github.io/listening-post/
