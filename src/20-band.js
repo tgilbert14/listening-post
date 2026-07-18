@@ -98,6 +98,68 @@ LP.band = (() => {
     return groups;
   }
 
+  /* ---------- space weather ---------- */
+  /* The ionosphere is the game, so the ionosphere gets WEATHER: a daily
+     geomagnetic K-index, sudden ionospheric disturbances on the dayside,
+     and sporadic-E openings at night. All seeded, all shared — the FORECAST
+     forecasts it, the S-meter reads it, the RST records it. */
+  const weather = {
+    /* daily K-index 0..8, weighted toward quiet days */
+    k() { return Math.floor(Math.pow(LP.mulberry(daySeed() + 31337)(), 1.8) * 9); },
+    /* SID: a flare hits the dayside D-layer and the band goes quiet for
+       minutes — fast onset, slow recovery. 0..1 severity. */
+    sid(t) {
+      const SLOT = 10800000; /* one roll per 3 h */
+      const slot = Math.floor(t / SLOT);
+      const r = LP.mulberry((daySeed() * 17 + slot * 131) | 0);
+      if (r() > 0.12) return 0;
+      const h = new Date(t).getHours();
+      if (h < 8 || h > 18) return 0; /* flares are a dayside problem */
+      const t0 = slot * SLOT + 600000 + r() * (SLOT - 1800000);
+      const dur = 180000 + r() * 300000;
+      if (t < t0 || t > t0 + dur) return 0;
+      const x = (t - t0) / dur;
+      return x < 0.12 ? x / 0.12 : Math.pow(1 - (x - 0.12) / 0.88, 1.6);
+    },
+    /* sporadic E: some nights the HIGH band opens anyway, for a while */
+    esOpen(t) {
+      const SLOT = 5400000; /* 90-minute patches */
+      const h = new Date(t).getHours();
+      if (h >= 7 && h < 20) return false;
+      return LP.mulberry((daySeed() * 23 + Math.floor(t / SLOT) * 71) | 0)() < 0.15;
+    },
+  };
+
+  /* ---------- ITA2 Baudot ---------- */
+  /* THE FORECAST is real RTTY now: five data bits, one start, one and a half
+     stop, LTRS/FIGS shifts, 45.45 baud. The half-bit stream below IS the
+     transmission — the FSK audio keys it and the decoder reads it back. */
+  const ITA2_LTRS = [null, 'E', '\n', 'A', ' ', 'S', 'I', 'U', '\r', 'D', 'R', 'J', 'N', 'F', 'C', 'K',
+    'T', 'Z', 'L', 'W', 'H', 'Y', 'P', 'Q', 'O', 'B', 'G', null, 'M', 'X', 'V', null];
+  const ITA2_FIGS = [null, '3', '\n', '-', ' ', "'", '8', '7', '\r', '$', '4', '', ',', '!', ':', '(',
+    '5', '+', ')', '2', '#', '6', '0', '1', '9', '?', '&', null, '.', '/', '=', null];
+  const ITA2_HALF = 1000 / 45.45 / 2; /* half-bit ms: 1.5 stop bits need half resolution */
+  function ita2encode(text) {
+    const L = {}, F = {};
+    ITA2_LTRS.forEach((ch, c) => { if (ch) L[ch] = c; });
+    ITA2_FIGS.forEach((ch, c) => { if (ch && !(ch in L)) F[ch] = c; });
+    const halves = []; const chars = [];
+    let shift = 'L';
+    const frame = (code) => { /* start(0) + 5 data LSB-first + 1.5 stop(1) */
+      halves.push(0, 0);
+      for (let b = 0; b < 5; b++) { const v = (code >> b) & 1; halves.push(v, v); }
+      halves.push(1, 1, 1);
+    };
+    frame(31); /* open in LTRS, like an operator */
+    for (const ch of text.toUpperCase()) {
+      if (L[ch] !== undefined) { if (shift !== 'L') { frame(31); shift = 'L'; } frame(L[ch]); }
+      else if (F[ch] !== undefined) { if (shift !== 'F') { frame(27); shift = 'F'; } frame(F[ch]); }
+      else continue;
+      chars.push({ ch, end: halves.length * ITA2_HALF }); /* printed when its stop bit lands */
+    }
+    return { halves, chars, txMs: halves.length * ITA2_HALF };
+  }
+
   /* ---------- station definitions ---------- */
   /* Every station: { id, name, f (kHz), band, bw (kHz, display), type, note }
      plus type params. activity(tMs) -> 0..1 keying, computed on demand. */
@@ -262,33 +324,71 @@ LP.band = (() => {
     return { kind, t0, dur };
   }
 
-  /* THE FORECAST: RTTY, 45 baud FSK. Lock it and the masthead's sub-line
-     becomes the decoder, typing out a desert shipping forecast. */
+  /* THE FORECAST: real RTTY — 45.45-baud ITA2 Baudot FSK, 170 Hz shift.
+     The half-bit stream is the single source of truth: the audio keys it,
+     the waterfall paints whichever tone is live, and the masthead decoder
+     prints each character the moment its stop bit lands. The forecast
+     itself is fresh each day, and it forecasts the BAND's weather too. */
+  const forecastText = () => {
+    const r = LP.mulberry(daySeed() * 7 + 5);
+    const pick = (a) => a[Math.floor(r() * a.length)];
+    const sky = ['CLEAR', 'HIGH HAZE', 'DUST RISING BY DAWN', 'COLD AND CLEAR'];
+    const wind = ['WIND LIGHT SW', 'WIND FRESH NW', 'STILL AIR', 'GUSTS OFF THE RIDGE'];
+    const p3 = ['HEAT LOW GOOD PASSAGE', 'PASSAGE FAIR', 'NO TRAFFIC EXPECTED', 'GOOD PASSAGE ALL NIGHT'];
+    const moon = `MOONSET 0${2 + Math.floor(r() * 4)}${String(Math.floor(r() * 60)).padStart(2, '0')}`;
+    const k = weather.k();
+    const cond = k >= 6 ? 'ROUGH BAND EXPECT FADES' : (k >= 4 ? 'BAND UNSETTLED' : 'THE BAND IS OPEN');
+    return `SECTOR ONE ${pick(sky)} ${pick(wind)} + SECTOR TWO ${pick(sky)} ${moon} + SECTOR THREE ${pick(p3)} + ALL SECTORS ${cond} + `;
+  };
   S.push({
     id: 'THE FORECAST', name: 'THE FORECAST', f: 3388.0, band: 0, type: 'rtty', bw: 0.45,
     note: 'the weather for places without weather stations',
-    text: 'SECTOR ONE CLEAR WIND LIGHT SW DUST RISING BY DAWN + SECTOR TWO STILL AIR MOONSET 0341 + SECTOR THREE HEAT LOW GOOD PASSAGE + ALL SECTORS THE BAND IS OPEN + ',
-    baud: 45.45,
-    cps: 6, /* display pace ≈ true 45.45-baud Baudot character rate */
+    baud: 45.45, text: '', _seed: -1, _enc: null, _cycle: 0,
+    refresh() {
+      const s = daySeed();
+      if (s === this._seed) return;
+      this._seed = s;
+      this.text = forecastText();
+      this._enc = ita2encode(this.text);
+      this._cycle = this._enc.txMs + 4000; /* the transmission, then a breath */
+    },
     activity(t) {
       if (netActive(t)) return morseOn(net.m, t - net.t0) ? 1 : 0;
-      const m = t % 34000;
-      return m < 30000 ? 1 : 0;
+      this.refresh();
+      return (t % this._cycle) < this._enc.txMs ? 1 : 0;
     },
-    charAt(t) {
-      const m = t % 34000;
-      if (m >= 30000) return null;
-      return this.text[Math.floor(m / 1000 * this.cps) % this.text.length];
+    /* mark (1) or space (0) on the air at time t; idle rests on mark */
+    bitAt(t) {
+      this.refresh();
+      const m = t % this._cycle;
+      if (m >= this._enc.txMs) return 1;
+      return this._enc.halves[Math.floor(m / ITA2_HALF)];
     },
-    /* the decoder's window: the last `span` characters finished by time t.
-       Null when the carrier is idle. The schedule lives HERE, with the model. */
+    /* FSK edges inside [t0..t1] for lookahead audio scheduling */
+    edges(t0, t1) {
+      this.refresh();
+      const out = [];
+      let prev = this.bitAt(t0);
+      /* walk half-bit boundaries; a cycle seam is just another boundary */
+      const step = ITA2_HALF;
+      for (let t = (Math.floor(t0 / step) + 1) * step; t <= t1; t += step) {
+        const b = this.bitAt(t);
+        if (b !== prev) { out.push({ t, mark: !!b }); prev = b; }
+      }
+      return out;
+    },
+    /* the decoder's window: the last `span` characters whose stop bits have
+       landed by time t. Null when the carrier is idle. */
     window(t, span) {
-      const m = t % 34000;
-      if (m >= 30000) return null;
-      const n = Math.floor(m / 1000 * this.cps);
+      this.refresh();
+      const m = t % this._cycle;
+      if (m >= this._enc.txMs) return null;
       let s = '';
-      for (let i = Math.max(0, n - span); i < n; i++) s += this.text[i % this.text.length];
-      return s;
+      for (const c of this._enc.chars) {
+        if (c.end > m) break;
+        s += c.ch;
+      }
+      return s.slice(-span);
     },
   });
 
@@ -324,7 +424,8 @@ LP.band = (() => {
     id: 'POSTCARD', name: 'POSTCARD', f: 9430.0, band: 2, type: 'sstv', bw: 2.4,
     note: 'a picture, thirty-two lines at a time',
     _m: compileMorse('DE POSTCARD PIC QRV', 16, 3000),
-    PERIOD: 360000, TX: 200000,
+    PERIOD: 360000, TX: 200000, H: 240,
+    lineMs() { return this.TX / this.H; },
     prog(t) { const m = t % this.PERIOD; return m < this.TX ? m / this.TX : -1; },
     activity(t) {
       if (netActive(t)) return morseOn(net.m, t - net.t0) ? 1 : 0; /* the picture can wait */
@@ -431,35 +532,50 @@ LP.band = (() => {
     return m.kind === 'carrier' ? m.f + Math.sin(t / 100000 + m.phase) * m.drift : m.f;
   }
   function minorStrength(m, t) {
-    return LP.clamp(m.base * bandFactor(m.band) * (0.7 + 0.3 * Math.sin(t / 7000 + m.phase)), 0, 1);
+    return LP.clamp(m.base * bandFactor(m.band, t) * (0.7 + 0.3 * Math.sin(t / 7000 + m.phase)), 0, 1)
+      * (1 - weather.sid(t) * 0.85); /* a flare flattens the underbrush too */
   }
 
   /* ---------- propagation ---------- */
   /* real HF behavior, played straight: the low band carries at night, the
-     high band by day, the middle hardly cares. The ionosphere is the game. */
-  function bandFactor(bandIx) {
+     high band by day, the middle hardly cares. The ionosphere is the game —
+     and now it has weather: storm days absorb the low band, sporadic E
+     opens the high band on nights it has no business being open. */
+  function bandFactor(bandIx, t) {
     const d = new Date();
     const h = d.getHours() + d.getMinutes() / 60;
     const day = 0.5 + 0.5 * Math.cos(((h - 13) / 24) * 2 * Math.PI); /* 1 at 13:00, 0 at 01:00 */
-    if (bandIx === 0) return 0.55 + 0.45 * (1 - day);  /* GROUND: a night band */
-    if (bandIx === 2) return 0.55 + 0.45 * day;        /* HIGH: a day band */
+    const k = weather.k();
+    if (bandIx === 0) {
+      let f = 0.55 + 0.45 * (1 - day);                  /* GROUND: a night band */
+      if (k >= 6) f *= 0.78;                            /* storm absorption bites low first */
+      return f;
+    }
+    if (bandIx === 2) {
+      let f = 0.55 + 0.45 * day;                        /* HIGH: a day band */
+      if (k >= 6) f *= day > 0.5 ? 0.9 : 0.7;           /* storms close the night path harder */
+      if (t !== undefined && weather.esOpen(t)) f = Math.max(f, 0.82); /* sporadic E: open anyway */
+      return f;
+    }
     return 0.92;                                        /* SKY: the reliable middle */
   }
-  /* slow QSB fading, per station */
+  /* slow QSB fading, per station — plus auroral flutter on storm days */
   function fade(st, t) {
     const seed = st.f * 7.3;
-    return 0.62
+    let v = 0.62
       + 0.28 * Math.sin(t / 9000 + seed)
       + 0.10 * Math.sin(t / 2300 + seed * 1.7);
+    if (weather.k() >= 5) v += 0.07 * Math.sin(t / 130 + seed * 3); /* fast shallow flutter */
+    return v;
   }
   function strength(st, t) {
     if (st.isOn && !st.isOn() && !netActive(t)) return 0;   /* its own hours — except for the net, once */
     /* THE CONSTANT, while the tenant is present, has no distance: no QSB, no
-       day/night curve, the same strength for every listener on Earth. Every
-       log of it carries the identical report. Afterward, it fades like
-       anything — the body remains; the tenant left. */
+       day/night curve, no storm, no flare. The same strength for every
+       listener on Earth. Afterward, it fades like anything. */
     if (st.type === 'constant' && present()) return 0.42;
-    return LP.clamp(fade(st, t) * bandFactor(st.band), 0.08, 1);
+    /* a flare on the dayside pushes every real signal down toward the noise */
+    return LP.clamp(fade(st, t) * bandFactor(st.band, t), 0.08, 1) * (1 - weather.sid(t) * 0.85);
   }
 
   /* ---------- the ghost ---------- */
@@ -511,13 +627,15 @@ LP.band = (() => {
   const sferic = { until: 0, level: 0, lastRoll: 0 };
   function spectrumRow(out, fLo, fHi, t, bandIx, rng) {
     const cols = out.length;
-    const noiseBase = 0.055 + bandIx * 0.012;
+    /* atmospheric noise falls WITH frequency, as it does on a real HF rig */
+    const noiseBase = 0.079 - bandIx * 0.012;
     /* lightning crash: a TIME-based hazard (one per ~24s on average), so the
-       storm doesn't care how often anyone renders it */
+       storm doesn't care how often anyone renders it. A flare in progress
+       charges the sky: crashes come more often while the signals sink. */
     if (t > sferic.until) {
       const p = 1 - Math.exp(-(t - sferic.lastRoll) / 24000);
       sferic.lastRoll = t;
-      if (rng() < p) { sferic.until = t + 140 + rng() * 400; sferic.level = 0.25 + rng() * 0.5; }
+      if (rng() < p * (1 + 2 * weather.sid(t))) { sferic.until = t + 140 + rng() * 400; sferic.level = 0.25 + rng() * 0.5; }
     }
     const crash = t < sferic.until ? sferic.level * (0.4 + 0.6 * rng()) : 0;
     for (let i = 0; i < cols; i++) {
@@ -553,9 +671,12 @@ LP.band = (() => {
     const sigma = Math.max(0.7, bw / span * cols / 2);
     /* type texture: rtty is two resolved tones; music/sstv fill their bandwidth */
     if (st && st.type === 'rtty') {
-      const off = 0.34 / span * cols / 2; /* display license: the shift reads as TWO tones */
-      splat(out, center - off, Math.max(0.7, sigma * 0.3), amp);
-      splat(out, center + off, Math.max(0.7, sigma * 0.3), amp * 0.9);
+      /* the honest 170 Hz shift, and the LIVE tone paints hot: zoom to
+         12 kHz and the start bits resolve — the raster shows the data */
+      const off = 0.17 / span * cols / 2;
+      const mark = st.bitAt ? st.bitAt(t) : 1;
+      splat(out, center + off, Math.max(0.7, sigma * 0.3), amp * (mark ? 1 : 0.3));
+      splat(out, center - off, Math.max(0.7, sigma * 0.3), amp * (mark ? 0.3 : 1));
       return;
     }
     if (st && st.type === 'sstv') {
@@ -588,10 +709,12 @@ LP.band = (() => {
     }
   }
 
-  /* keying edges for lookahead audio scheduling: [{t (wall ms), on}] inside [t0..t1] */
-  function keyEdges(st, t0, t1) {
+  /* keying edges for lookahead audio scheduling: [{t (wall ms), on}] inside
+     [t0..t1]. noNet: the underbrush never joins the net — strangers stay
+     strangers even at the one moment the named band speaks in unison. */
+  function keyEdges(st, t0, t1, noNet) {
     const k = st.keyed ? st.keyed(t0)
-      : (t0 >= net.t0 && t0 < net.until) ? { m: net.m, off: t0 - net.t0 }
+      : (!noNet && t0 >= net.t0 && t0 < net.until) ? { m: net.m, off: t0 - net.t0 }
         : { m: st._m, off: t0 };
     const m = k.m;
     const base = t0 - k.off;
@@ -612,7 +735,7 @@ LP.band = (() => {
     BANDS, stations: S, strength, spectrumRow, ghost, latticeGroups,
     compileMorse, morseOn, decodeMorse, sferic, net, netActive, keyEdges,
     minors, minorActive, minorF, minorStrength,
-    present, roomEvent, crossRead,
+    present, roomEvent, crossRead, weather,
   };
 })();
 

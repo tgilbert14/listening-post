@@ -38,7 +38,11 @@ LP.log = (() => {
     const off = Math.abs(LP.rx.vfo - st.f);
     const sel = LP.selectivity(off, st.bw);
     const s = LP.clamp(Math.round(1 + LP.band.strength(st, t) * sel * 8), 1, 9);
-    const r = LP.clamp(Math.round(2 + sel * 3), 1, 5);
+    /* readability suffers on rough nights: storms and flares cost a point.
+       THE CONSTANT ignores the weather like it ignores everything else. */
+    const wx = st.type === 'constant' && LP.band.present() ? 0
+      : (LP.band.weather.k() >= 6 ? 1 : 0) + (LP.band.weather.sid(t) > 0.3 ? 1 : 0);
+    const r = LP.clamp(Math.round(2 + sel * 3 - wx), 1, 5);
     const cw = st.type === 'beacon' || st.type === 'crossing' || st.type === 'constant';
     return cw ? `${r}${s}9` : `${r}${s}`;
   }

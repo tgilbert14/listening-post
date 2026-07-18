@@ -152,8 +152,10 @@ LP.display = (() => {
   }
 
   /* ---------- S-meter ---------- */
-  /* the scale never changes between resizes: paint it once, blit it forever */
-  let needle = 0, meterBg = null;
+  /* the scale never changes between resizes: paint it once, blit it forever.
+     Graduated in S-units now — S1..S9 in pencil, the red past S9 — with a
+     perceptual (log-ish) needle law like a real movement. */
+  let needle = 0, needleV = 0, meterBg = null;
   function meterScale() {
     const w = meter.width, h = meter.height;
     if (!w) return;
@@ -164,6 +166,9 @@ LP.display = (() => {
     const cxp = w / 2, cyp = h * 1.32, r = h * 1.05;
     bx.strokeStyle = '#2b332e'; bx.lineWidth = px;
     bx.beginPath(); bx.arc(cxp, cyp, r, -2.25, -0.9); bx.stroke();
+    bx.font = `${Math.max(6, h * 0.14)}px Consolas, monospace`;
+    bx.textAlign = 'center';
+    const LABELS = ['1', '', '3', '', '5', '', '7', '', '9'];
     for (let i = 0; i <= 8; i++) {
       const a = -2.25 + (i / 8) * 1.35;
       bx.strokeStyle = i > 6 ? 'rgba(217,109,90,.8)' : 'rgba(154,163,156,.5)';
@@ -172,7 +177,14 @@ LP.display = (() => {
       bx.moveTo(cxp + Math.cos(a) * (r - 4 * px), cyp + Math.sin(a) * (r - 4 * px));
       bx.lineTo(cxp + Math.cos(a) * (r + 3 * px), cyp + Math.sin(a) * (r + 3 * px));
       bx.stroke();
+      if (LABELS[i]) {
+        bx.fillStyle = i > 6 ? 'rgba(217,109,90,.8)' : 'rgba(154,163,156,.7)';
+        bx.fillText(LABELS[i], cxp + Math.cos(a) * (r + 8 * px), cyp + Math.sin(a) * (r + 8 * px) + 3 * px);
+      }
     }
+    bx.fillStyle = 'rgba(154,163,156,.55)';
+    bx.textAlign = 'left';
+    bx.fillText('S', 4 * px, h - 4 * px);
   }
   function drawMeter(dt) {
     const w = meter.width, h = meter.height;
@@ -180,9 +192,16 @@ LP.display = (() => {
     mx.clearRect(0, 0, w, h);
     if (meterBg) mx.drawImage(meterBg, 0, 0);
     const cxp = w / 2, cyp = h * 1.32, r = h * 1.05;
-    /* frame-rate-independent ballistics; reduced motion snaps honestly */
-    needle = LP.rm.matches ? LP.audio.smeter
-      : LP.audio.smeter + (needle - LP.audio.smeter) * Math.exp(-(dt || 16) / 110);
+    /* a real movement: log-taper target, spring-and-damper needle with a
+       touch of overshoot. Reduced motion snaps honestly. */
+    const target = Math.pow(LP.clamp(LP.audio.smeter, 0, 1), 0.72);
+    if (LP.rm.matches) { needle = target; needleV = 0; }
+    else {
+      const dtS = Math.min(0.05, (dt || 16) / 1000);
+      const W0 = 18, ZETA = 0.6; /* ~60 ms response, slight overshoot */
+      needleV += (W0 * W0 * (target - needle) - 2 * ZETA * W0 * needleV) * dtS;
+      needle += needleV * dtS;
+    }
     const a = -2.25 + LP.clamp(needle, 0, 1) * 1.35;
     mx.strokeStyle = '#d9a441'; mx.lineWidth = 1.6 * px;
     mx.beginPath();

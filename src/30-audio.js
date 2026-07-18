@@ -130,10 +130,9 @@ LP.audio = (() => {
       v.digit.connect(v.digitG).connect(g);
       v.aux.push(f, v.buzzG, v.digitG);
     } else if (st.type === 'rtty') {
-      v.o = osc('sine', 935);
-      const lfo = osc('square', st.baud / 2);
-      const dep = ctx.createGain(); dep.gain.value = 85;
-      lfo.connect(dep).connect(v.o.frequency);
+      /* one oscillator, hard-keyed between mark and space by the model's
+         actual ITA2 half-bit stream — the diddle you hear IS the data */
+      v.o = osc('sine', 1020);
       v.o.connect(g);
     } else if (st.type === 'night') {
       v.o = osc('sine', 220);
@@ -147,10 +146,14 @@ LP.audio = (() => {
       v.lastTone = -1;
       v.aux.push(echoIn, dl, fb, v.toneG);
     } else if (st.type === 'sstv') {
-      v.o = osc('sine', 1500);
+      v.o = osc('sine', 1900);
       const sg = ctx.createGain(); sg.gain.value = 0.55;
       v.o.connect(sg).connect(g);
-      v.aux.push(sg);
+      /* the line sync: 9 ms of 1200 Hz at the top of every scan line */
+      v.sync = osc('sine', 1200);
+      v.syncG = ctx.createGain(); v.syncG.gain.value = 0;
+      v.sync.connect(v.syncG).connect(g);
+      v.aux.push(sg, v.syncG);
     } else if (st.type === 'crossing') {
       /* a grade-crossing bell heard across a long night: two warm tones
          through a lowpass, swinging back and forth, far away and small */
@@ -311,6 +314,17 @@ LP.audio = (() => {
         }
       } else if (st.type === 'rtty') {
         v.g.gain.setTargetAtTime(vol * 0.16, now, K);
+        /* FSK scheduled ahead on the audio clock: mark 1020, space 850 —
+           a 170 Hz shift, keyed by the same half-bit stream the decoder
+           reads. A stalled frame cannot smear a start bit. */
+        if (st.bitAt) {
+          const fo = v.o.frequency;
+          fo.cancelScheduledValues(now);
+          fo.setValueAtTime(st.bitAt(t) ? 1020 : 850, now);
+          for (const e of st.edges(t, t + 330)) {
+            fo.setValueAtTime(e.mark ? 1020 : 850, now + Math.max(0.001, (e.t - t) / 1000));
+          }
+        }
       } else if (st.type === 'night') {
         v.g.gain.setTargetAtTime(str * sel * 0.5, now, 0.05);
         const ix = st.toneIx(t);
@@ -328,12 +342,24 @@ LP.audio = (() => {
       } else if (st.type === 'sstv') {
         const prog = st.prog(t);
         if (prog >= 0 && LP.sstv) {
-          v.o.frequency.setTargetAtTime(1200 + LP.sstv.lumaAt(prog) * 1100, now, 0.008);
+          /* luma rides the standard SSTV video band: black 1500, white 2300 */
+          v.o.frequency.setTargetAtTime(1500 + LP.sstv.lumaAt(prog) * 800, now, 0.008);
           v.g.gain.setTargetAtTime(vol * 0.14, now, K);
+          /* upcoming line syncs, scheduled ahead like everything else */
+          const lineMs = st.lineMs();
+          const m = t % st.PERIOD;
+          const sg = v.syncG.gain;
+          sg.cancelScheduledValues(now);
+          for (let nl = (Math.floor(m / lineMs) + 1) * lineMs; nl < m + 330 && nl < st.TX; nl += lineMs) {
+            const at = now + (nl - m) / 1000;
+            sg.setTargetAtTime(vol * 0.2, at, 0.002);
+            sg.setTargetAtTime(0, at + 0.009, 0.002);
+          }
         } else {
           /* the CW ident between pictures */
           v.o.frequency.setTargetAtTime(740, now, 0.02);
           v.g.gain.setTargetAtTime(st.activity(t) * str * sel * 0.2, now, K);
+          if (v.syncG) v.syncG.gain.setTargetAtTime(0, now, 0.01);
         }
       } else if (st.type === 'crossing') {
         v.o.frequency.setTargetAtTime(st.toneHigh(t) ? 660 : 494, now, 0.02);
@@ -389,8 +415,16 @@ LP.audio = (() => {
         v.o.frequency.setTargetAtTime(140 + Math.abs(off) * 260, now, 0.05);
         v.g.gain.setTargetAtTime(str * sel * 0.05, now, K);
       } else { /* cw */
+        /* the ragchews get the same lookahead keying the beacons earned:
+           a stalled frame can't smear a stranger's dit either */
         v.o.frequency.setTargetAtTime(LP.clamp(300 + Math.abs(off) * 1000, 220, 1700), now, 0.03);
-        v.g.gain.setTargetAtTime(str * sel * 0.16, now, K);
+        const lvl = str * sel * 0.16;
+        const gg = v.g.gain;
+        gg.cancelScheduledValues(now);
+        gg.setTargetAtTime(LP.band.morseOn(m._m, t) ? lvl : 0, now, K);
+        for (const e of LP.band.keyEdges(m, t, t + 330, true)) {
+          gg.setTargetAtTime(e.on ? lvl : 0, now + Math.max(0.001, (e.t - t) / 1000), 0.008);
+        }
       }
     }
 
