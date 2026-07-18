@@ -6,13 +6,14 @@ const check = (name, ok, detail = '') => {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  — ' + detail : ''}`);
   if (!ok) fails++;
 };
-const enterMission = async (page) => {
-  if (!await page.$('#title-screen:not([hidden])')) return;
-  await page.click('#mission-start');
-  await page.waitForTimeout(1100);
-  const response = await page.$('#codec-choices button');
-  if (response) await response.click();
-  await page.waitForTimeout(150);
+const openReceiverForTest = async (page) => {
+  await page.evaluate(() => {
+    const cover = document.getElementById('title-screen');
+    if (cover) cover.hidden = true;
+    const codec = document.getElementById('codec');
+    if (codec) { codec.hidden = true; codec.style.pointerEvents = 'none'; }
+    document.body.classList.add('mission-started');
+  });
 };
 
 (async () => {
@@ -30,7 +31,9 @@ const enterMission = async (page) => {
   const pressed = await page.evaluate(() =>
     [0, 1, 2].map((i) => document.getElementById('band-' + i).getAttribute('aria-pressed')));
   check('fresh visit: SKY chip pressed, GROUND not', pressed[1] === 'true' && pressed[0] === 'false', JSON.stringify(pressed));
-  await enterMission(page);
+  // Receiver regressions are isolated from the asynchronous campaign calls;
+  // dedicated checks below exercise the real START interaction itself.
+  await openReceiverForTest(page);
 
   // M1b: documented '2' key is not a dead no-op semantically — '1' switches to GROUND
   await page.keyboard.press('1');
