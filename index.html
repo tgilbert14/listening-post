@@ -12,13 +12,13 @@
 <meta property="og:image" content="https://tgilbert14.github.io/listening-post/og-card.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A phosphor-green spectrum waterfall at zero-beat on AURORA, lightning crashes across the band.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://tgilbert14.github.io/listening-post/og-card.jpg">
+<meta name="twitter:image:alt" content="A phosphor-green spectrum waterfall at zero-beat on AURORA, lightning crashes across the band.">
 <meta name="theme-color" content="#050807">
 <link rel="canonical" href="https://tgilbert14.github.io/listening-post/">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='6' y='22' width='52' height='30' rx='4' fill='none' stroke='%236fdd8b' stroke-width='4'/%3E%3Cpath d='M14 36 h6 M26 36 h10 M42 36 h8' stroke='%236fdd8b' stroke-width='4' stroke-linecap='round'/%3E%3Cpath d='M32 22 L48 8' stroke='%23d9a441' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
-</head>
-<body>
 <style>
 /* THE LISTENING POST — tokens. A radio room at 3 AM: near-black chassis,
    phosphor green display glass, one amber pilot-lamp accent, pencil grey. */
@@ -175,6 +175,14 @@ a.skip:focus-visible {
 .station-id.on { opacity: 1; }
 .freq .khz { font-size: .38em; color: var(--phos-text); letter-spacing: .2em; margin-left: 6px; }
 .freq.locked { color: var(--amber); text-shadow: 0 0 16px rgba(217,164,65,.5); }
+/* the pencil line: a hold-to-log in progress, drawing itself */
+.lockbar {
+  height: 2px; width: 0%;
+  margin-top: 3px; border-radius: 1px;
+  background: var(--amber);
+  box-shadow: 0 0 6px rgba(217,164,65,.6);
+  transition: width .2s linear;
+}
 
 /* the dial: a brushed tuning strip */
 #dial {
@@ -256,6 +264,7 @@ button.chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px
   max-height: calc(100vh - 200px);
   overflow: auto;
   background: linear-gradient(180deg, #14191662, #10141362);
+  -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
   border: 1px solid #2b332e;
   border-radius: 8px;
@@ -359,7 +368,7 @@ button.chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px
 }
 .qsl .sig {
   text-align: right; font-family: var(--serif); font-style: italic;
-  color: #6a746c; font-size: 12.5px; margin: 10px 0 12px;
+  color: #4f5852; font-size: 12.5px; margin: 10px 0 12px; /* 4.9:1 on the card stock */
 }
 .qsl-close {
   display: block; margin: 0 auto;
@@ -391,6 +400,8 @@ body.arriving .masthead, body.arriving .panel { opacity: 0; }
   font-variant: small-caps; letter-spacing: .18em;
   color: var(--pencil); font-size: 15px; font-family: var(--serif);
 }
+.brochure .visit { margin-top: 2vmin; font-size: 12px; }
+.brochure a { color: var(--amber); }
 
 @media (prefers-reduced-motion: reduce) {
   .develop, .logbook { transition: none; }
@@ -400,7 +411,34 @@ body.arriving .masthead, body.arriving .panel { opacity: 0; }
 @media (forced-colors: active) {
   button.chip, #dial { border: 1px solid ButtonText; }
   #dial::after { background: Highlight; forced-color-adjust: none; }
-  button.chip[aria-pressed="true"] { border: 3px double Highlight; forced-color-adjust: none; color: Highlight; }
+  /* state lives on the BORDER; text keeps the system's own guaranteed
+     contrast in dark and light high-contrast themes alike */
+  button.chip[aria-pressed="true"] { border: 3px double SelectedItem; }
+}
+
+/* touch: fingers get honest targets */
+@media (pointer: coarse) {
+  button.chip { min-height: 44px; }
+}
+
+/* deep zoom / tiny viewports: the fixed room becomes a page that SCROLLS —
+   400% zoom must never lock a control out of reach (WCAG 1.4.10) */
+@media (max-height: 480px), (max-width: 340px) {
+  html, body { overflow: auto; }
+  body::before { display: none; }
+  .masthead { position: static; padding: 12px 16px 0; }
+  .rig {
+    position: static;
+    min-height: 100vh; height: auto;
+    padding: 10px 3vw 18px;
+  }
+  .glass { min-height: 240px; }
+  .develop, .logbook, .opcard {
+    position: static;
+    margin: 10px auto;
+    max-height: none;
+    transform: none;
+  }
 }
 
 /* phones: stack the panel */
@@ -424,6 +462,8 @@ body.arriving .masthead, body.arriving .panel { opacity: 0; }
 }
 
 </style>
+</head>
+<body>
 <a class="sr-only skip" href="#dial">Skip to the dial</a>
 
 <header class="masthead">
@@ -441,6 +481,7 @@ body.arriving .masthead, body.arriving .panel { opacity: 0; }
     <div class="freq-stack">
       <p class="freq" id="freq" aria-hidden="true">— <span class="khz">kHz</span></p>
       <p class="station-id" id="station-id" aria-hidden="true"></p>
+      <div class="lockbar" id="lockbar" aria-hidden="true"></div>
     </div>
 
     <div id="dial" role="slider" tabindex="0" aria-label="Tuning dial"
@@ -515,6 +556,7 @@ body.arriving .masthead, body.arriving .panel { opacity: 0; }
           <circle cx="376" cy="202" r="10" fill="none" stroke="#d9a441" stroke-width="3"/>
         </svg>
         <p>A shortwave receiver at 3 AM. The band is open — voices in the static,<br>a picture riding the noise, and something that listens back.<br>JavaScript is the ionosphere here.</p>
+        <p class="visit">Schematics: <a href="https://github.com/tgilbert14/listening-post">github.com/tgilbert14/listening-post</a></p>
       </div>
     </div>
   </noscript>
@@ -536,14 +578,16 @@ LP.DPR = () => Math.min(devicePixelRatio || 1, 2);
 
 LP.ticker = (() => {
   const tasks = new Set();
-  let rafId = null, last = 0;
+  let rafId = null, last = 0, inFrame = false;
   function frame(now) {
     rafId = null;
+    inFrame = true; /* a kick() from inside a task must not double-schedule the loop */
     const dt = Math.min(50, now - last) || 16; last = now;
     for (const t of tasks) { if (t(dt, now) === false) tasks.delete(t); } /* Set tolerates delete-during-iteration */
-    if (tasks.size && !document.hidden) rafId = requestAnimationFrame(frame);
+    inFrame = false;
+    if (rafId === null && tasks.size && !document.hidden) rafId = requestAnimationFrame(frame);
   }
-  function kick() { if (rafId === null && tasks.size && !document.hidden) { last = performance.now(); rafId = requestAnimationFrame(frame); } }
+  function kick() { if (!inFrame && rafId === null && tasks.size && !document.hidden) { last = performance.now(); rafId = requestAnimationFrame(frame); } }
   document.addEventListener('visibilitychange', () => { if (!document.hidden) kick(); });
   return { add(t) { tasks.add(t); kick(); return () => tasks.delete(t); }, kick };
 })();
@@ -551,6 +595,10 @@ LP.ticker = (() => {
 LP.TAU = Math.PI * 2;
 LP.clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 LP.lerp = (a, b, t) => a + (b - a) * t;
+
+/* the receiver's passband: how much of a signal at offset `off` kHz lands in
+   the ear. ONE formula — the audio, the meter, and the RST all share it. */
+LP.selectivity = (off, bw) => Math.exp(-(off * off) / (2 * Math.pow(Math.max(bw, 0.35) * 0.9, 2)));
 
 /* seeded PRNG for stable texture */
 LP.mulberry = (seed) => () => {
@@ -589,6 +637,7 @@ LP.band = (() => {
     Q: '--.-', R: '.-.', S: '...', T: '-', U: '..-', V: '...-', W: '.--', X: '-..-',
     Y: '-.--', Z: '--..', 0: '-----', 1: '.----', 2: '..---', 3: '...--', 4: '....-',
     5: '.....', 6: '-....', 7: '--...', 8: '---..', 9: '----.', '?': '..--..', '/': '-..-.',
+    '%': '...-.-', /* the SK prosign, sent as one character: end of contact */
   };
   /* compile text -> [ [onMs, offMs], ... ] repeating pattern + total length */
   function compileMorse(text, wpm, tailMs) {
@@ -649,9 +698,12 @@ LP.band = (() => {
   }
 
   /* ---------- the day's numbers ---------- */
+  /* local calendar date, UTC arithmetic: the seed rolls at local midnight and
+     never drifts an hour across a DST change */
   const daySeed = () => {
     const d = new Date();
-    return d.getFullYear() * 1000 + Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 86400000);
+    return d.getFullYear() * 1000
+      + Math.round((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - Date.UTC(d.getFullYear(), 0, 1)) / 86400000) + 1;
   };
   function latticeGroups() {
     const rnd = LP.mulberry(daySeed());
@@ -687,10 +739,11 @@ LP.band = (() => {
   net.arm = () => {
     net.m = present()
       ? compileMorse('73 73 73', 14, 2600)
-      : humanize(compileMorse('73 73 SK', 14, 2600), LP.mulberry(4257), 1200 / 14);
+      : humanize(compileMorse('73 73 %', 14, 2600), LP.mulberry(4257), 1200 / 14);
     net.t0 = Date.now();
     net.until = net.t0 + net.m.total;
   };
+  const netActive = (t) => t >= net.t0 && t < net.until;
 
   /* THE CROSS-READ: some nights, for one message, a beacon keys its sister's
      ident — the wrong mask, once, corrected next cycle. Never after. */
@@ -717,9 +770,12 @@ LP.band = (() => {
     return { m: c.vic._m, off: t - c.w0 };
   }
 
+  /* every beacon keeper has a FIST — a seeded, repeatable wobble, a hand you
+     could learn to recognize. THE CONSTANT alone keys machine-perfect: the one
+     hand on the band that does not wobble is the tell. */
   const beacon = (id, f, band, text, wpm, pitchBias, note) => S.push({
     id, name: id, f, band, type: 'beacon', bw: 0.12, wpm, pitchBias, note,
-    _m: compileMorse(text, wpm, 2200), text,
+    _m: humanize(compileMorse(text, wpm, 2200), LP.mulberry((f * 37) | 0), 1200 / wpm), text,
     /* which compiled pattern is on the air right now: the net outranks the
        masks (the unison is the tenant's own voice), the mask outranks habit */
     keyed(t) {
@@ -759,7 +815,8 @@ LP.band = (() => {
         this._traceDay = false;
         /* the group that is about you: rare, seeded, deniable */
         if (present() && LP.mulberry(s + 99)() < 0.25) {
-          const tr = LP.store.get('trace', {});
+          let tr = LP.store.get('trace', {});
+          if (!tr || typeof tr !== 'object' || Array.isArray(tr)) tr = {}; /* a poisoned trace stays a rumor */
           const top = Object.keys(tr).sort((a, b) => tr[b] - tr[a])[0];
           if (top) {
             this._traceDay = true;
@@ -796,6 +853,7 @@ LP.band = (() => {
       return { mode: 'gap' };
     },
     activity(t) {
+      if (netActive(t)) return morseOn(net.m, t - net.t0) ? 1 : 0; /* the buzzer, keying morse: once */
       const p = this.phase(t);
       if (p.mode === 'musicbox') return p.on ? 0.7 : 0.12;
       return p.on ? 1 : (p.mode === 'gap' ? 0 : 0.12);
@@ -829,12 +887,26 @@ LP.band = (() => {
     note: 'the weather for places without weather stations',
     text: 'SECTOR ONE CLEAR WIND LIGHT SW DUST RISING BY DAWN + SECTOR TWO STILL AIR MOONSET 0341 + SECTOR THREE HEAT LOW GOOD PASSAGE + ALL SECTORS THE BAND IS OPEN + ',
     baud: 45.45,
-    activity(t) { const m = t % 34000; return m < 30000 ? 1 : 0; },
+    cps: 6, /* display pace ≈ true 45.45-baud Baudot character rate */
+    activity(t) {
+      if (netActive(t)) return morseOn(net.m, t - net.t0) ? 1 : 0;
+      const m = t % 34000;
+      return m < 30000 ? 1 : 0;
+    },
     charAt(t) {
       const m = t % 34000;
       if (m >= 30000) return null;
-      const cps = 6; /* display pace, characters per second */
-      return this.text[Math.floor(m / 1000 * cps) % this.text.length];
+      return this.text[Math.floor(m / 1000 * this.cps) % this.text.length];
+    },
+    /* the decoder's window: the last `span` characters finished by time t.
+       Null when the carrier is idle. The schedule lives HERE, with the model. */
+    window(t, span) {
+      const m = t % 34000;
+      if (m >= 30000) return null;
+      const n = Math.floor(m / 1000 * this.cps);
+      let s = '';
+      for (let i = Math.max(0, n - span); i < n; i++) s += this.text[i % this.text.length];
+      return s;
     },
   });
 
@@ -842,7 +914,11 @@ LP.band = (() => {
   S.push({
     id: 'AURORA', name: 'AURORA', f: 6785.0, band: 1, type: 'music', bw: 4.2,
     note: 'someone, somewhere, is playing records',
-    activity(t) { const m = t % 52000; return m < 47000 ? 1 : 0.15; },
+    activity(t) {
+      if (netActive(t)) return morseOn(net.m, t - net.t0) ? 1 : 0; /* the record stops for this */
+      const m = t % 52000;
+      return m < 47000 ? 1 : 0.15;
+    },
   });
 
   /* HOMECOMING: only after dark, local. Eleven slow tones. */
@@ -851,6 +927,7 @@ LP.band = (() => {
     note: 'eleven tones, only after dark',
     isOn() { const h = new Date().getHours(); return h >= 21 || h < 6; },
     activity(t) {
+      if (netActive(t)) return morseOn(net.m, t - net.t0) ? 1 : 0; /* even in daylight: once */
       if (!this.isOn()) return 0;
       const m = t % 26000;
       const ix = Math.floor(m / 2000);
@@ -868,6 +945,7 @@ LP.band = (() => {
     PERIOD: 360000, TX: 200000,
     prog(t) { const m = t % this.PERIOD; return m < this.TX ? m / this.TX : -1; },
     activity(t) {
+      if (netActive(t)) return morseOn(net.m, t - net.t0) ? 1 : 0; /* the picture can wait */
       const m = t % this.PERIOD;
       if (m < this.TX) return 1;
       if (m > this.TX + 8000 && m < this.TX + 40000) return morseOn(this._m, m - this.TX - 8000) ? 1 : 0;
@@ -887,6 +965,7 @@ LP.band = (() => {
       return night && LP.mulberry(daySeed() + 777)() < 0.28;
     },
     activity(t) {
+      if (netActive(t)) return morseOn(net.m, t - net.t0) ? 1 : 0; /* the bell keeps the rhythm too */
       if (!this.isOn()) return 0;
       const m = t % 46000;
       if (m > 34000) return 0;                       /* it fades between rings */
@@ -948,7 +1027,7 @@ LP.band = (() => {
             ? compileMorse(`${other} DE ${call} R R TNX FER RPRT 73`, m.wpm, 6000 + rnd() * 8000)
             : compileMorse(`CQ CQ DE ${call} ${call} K`, m.wpm, 4000 + rnd() * 9000);
           /* every human hand has a fist — a repeatable timing wobble, visible
-             at the 12 kHz zoom. The named beacons key clean (they are
+             at the 12 kHz zoom. The named beacons wobble too (keepers, not
              machines); the one signal with NO fist and NO fade is the tell. */
           humanize(m._m, rnd, 1200 / m.wpm);
         }
@@ -992,7 +1071,7 @@ LP.band = (() => {
       + 0.10 * Math.sin(t / 2300 + seed * 1.7);
   }
   function strength(st, t) {
-    if (st.isOn && !st.isOn()) return 0;   /* any station may keep its own hours */
+    if (st.isOn && !st.isOn() && !netActive(t)) return 0;   /* its own hours — except for the net, once */
     /* THE CONSTANT, while the tenant is present, has no distance: no QSB, no
        day/night curve, the same strength for every listener on Earth. Every
        log of it carries the identical report. Afterward, it fades like
@@ -1149,7 +1228,7 @@ LP.band = (() => {
 
   return {
     BANDS, stations: S, strength, spectrumRow, ghost, latticeGroups,
-    compileMorse, morseOn, decodeMorse, sferic, net, keyEdges,
+    compileMorse, morseOn, decodeMorse, sferic, net, netActive, keyEdges,
     minors, minorActive, minorF, minorStrength,
     present, roomEvent, crossRead,
   };
@@ -1232,8 +1311,24 @@ LP.audio = (() => {
     if (ctx.state !== 'running') ctx.resume().then(reflect).catch(reflect);
     else reflect();
   }
+  /* the chip does what it SAID when the visitor pressed it: the state is
+     read at the very START of the gesture, before the gesture itself can arm
+     the context and flip the chip on — so the first click can never silently
+     bank an opt-out the visitor didn't mean. These capture listeners register
+     BEFORE interact's arming ones (module order), so they always run first. */
+  let shownAtPress = null;
+  const notePress = (e) => {
+    if (chip && e.target instanceof Node && chip.contains(e.target)) {
+      shownAtPress = chip.getAttribute('aria-pressed') === 'true';
+    }
+  };
+  addEventListener('pointerdown', notePress, { capture: true });
+  addEventListener('keydown', notePress, { capture: true });
   function toggle() {
-    enabled = !enabled;
+    const shown = shownAtPress !== null ? shownAtPress
+      : (chip && chip.getAttribute('aria-pressed') === 'true');
+    shownAtPress = null;
+    enabled = !shown;
     LP.store.set('sound', enabled);
     if (enabled) { build(); if (ctx) ctx.resume().then(reflect).catch(reflect); LP.say('Sound on.'); }
     else { if (ctx) ctx.suspend(); reflect(); LP.say('Sound off.'); }
@@ -1364,11 +1459,15 @@ LP.audio = (() => {
       if (st.band !== rx.band) continue;
       const off = rx.vfo - st.f;
       if (Math.abs(off) > 5) continue;
-      const sel = Math.exp(-(off * off) / (2 * Math.pow(Math.max(st.bw, 0.35) * 0.9, 2)));
+      const sel = LP.selectivity(off, st.bw);
       m = Math.max(m, LP.band.strength(st, t) * sel * (0.4 + 0.6 * st.activity(t)));
     }
     const gh = LP.band.ghost;
-    if (gh.state !== 'asleep' && gh.state !== 'gone') m = Math.max(m, gh.strength() * 0.8);
+    if (gh.state !== 'asleep' && gh.state !== 'gone') {
+      /* the needle reads it like any signal: only near its carrier */
+      const gsel = Math.exp(-Math.pow(rx.vfo - gh.f, 2) / 0.5);
+      m = Math.max(m, gh.strength() * 0.8 * gsel);
+    }
     return m;
   }
 
@@ -1392,7 +1491,7 @@ LP.audio = (() => {
       const act = st.activity(t);
       const str = LP.band.strength(st, t);
       /* selectivity: how much of it lands in the passband */
-      const sel = Math.exp(-(off * off) / (2 * Math.pow(Math.max(st.bw, 0.35) * 0.9, 2)));
+      const sel = LP.selectivity(off, st.bw);
       let vol = act * str * sel;
       if (v.pan) v.pan.pan.setTargetAtTime(LP.clamp((st.f - rx.vfo) / 3.5, -0.75, 0.75), now, 0.08);
 
@@ -1498,6 +1597,19 @@ LP.audio = (() => {
           v.step++;
         }
       }
+
+      /* the net: while it runs, EVERY named voice keys the same characters at
+         the same moment — each in its own timbre, all in one rhythm. The
+         beacon paths above already schedule it; this covers the rest. */
+      if (LP.band.netActive(t) && st.type !== 'beacon' && st.type !== 'constant') {
+        const lvl = str * sel * 0.28;
+        const gg = v.g.gain;
+        gg.cancelScheduledValues(now);
+        gg.setTargetAtTime(st.activity(t) > 0 ? lvl : 0, now, 0.008);
+        for (const e of LP.band.keyEdges(st, t, t + 330)) {
+          gg.setTargetAtTime(e.on ? lvl : 0, now + Math.max(0.001, (e.t - t) / 1000), 0.008);
+        }
+      }
     }
 
     /* the underbrush within earshot: quiet CW, hets, and hash under the dial */
@@ -1535,8 +1647,10 @@ LP.audio = (() => {
       const off = Math.abs(LP.rx.vfo - gh.f);
       if (v.pan) v.pan.pan.setTargetAtTime(LP.clamp((gh.f - LP.rx.vfo) / 3.5, -0.75, 0.75), now, 0.08);
       if (gh.state === 'asking') {
+        /* it asks at your ear only if your ear is THERE: the question obeys
+           the passband like any honest carrier */
         v.o.frequency.setTargetAtTime(478, now, 0.02);
-        v.g.gain.setTargetAtTime(gh.activity(t) * 0.24, now, K);
+        v.g.gain.setTargetAtTime(gh.activity(t) * 0.24 * Math.exp(-off * off / 0.5), now, K);
       } else {
         /* heterodyne: the whistle falls as it closes on you */
         const beat = LP.clamp(off * 1000, 24, 2400);
@@ -1700,6 +1814,7 @@ LP.audio = (() => {
     g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
     o.connect(g).connect(bus);
     o.start(when); o.stop(when + dur + 0.1);
+    o.onended = () => { try { o.disconnect(); g.disconnect(); } catch { } };
   }
 
   LP.relayClunk = relayClunk;
@@ -1848,37 +1963,47 @@ LP.display = (() => {
     const first = Math.ceil(fLo / step) * step;
     for (let f = first; f < fLo + win; f += step) {
       const x = (f - fLo) / win * w;
-      cx.fillStyle = 'rgba(154,163,156,.25)';
+      cx.fillStyle = 'rgba(154,163,156,.4)';
       cx.fillRect(x, wfY + wfH, px, 5 * px);
-      cx.fillStyle = 'rgba(154,163,156,.55)';
+      cx.fillStyle = 'rgba(154,163,156,.8)';
       cx.fillText(String(f), x, h - 5);
     }
     /* span badge: tell the operator how wide the window is */
     cx.textAlign = 'right';
-    cx.fillStyle = 'rgba(217,164,65,.6)';
+    cx.fillStyle = 'rgba(217,164,65,.85)';
     cx.font = `${Math.max(8, h * 0.024)}px Consolas, monospace`;
     cx.fillText(`SPAN ${win} kHz`, w - 6, wfY + 12 * px);
   }
 
   /* ---------- S-meter ---------- */
-  let needle = 0;
+  /* the scale never changes between resizes: paint it once, blit it forever */
+  let needle = 0, meterBg = null;
+  function meterScale() {
+    const w = meter.width, h = meter.height;
+    if (!w) return;
+    if (!meterBg) meterBg = document.createElement('canvas');
+    meterBg.width = w; meterBg.height = h;
+    const bx = meterBg.getContext('2d');
+    const px = LP.DPR();
+    const cxp = w / 2, cyp = h * 1.32, r = h * 1.05;
+    bx.strokeStyle = '#2b332e'; bx.lineWidth = px;
+    bx.beginPath(); bx.arc(cxp, cyp, r, -2.25, -0.9); bx.stroke();
+    for (let i = 0; i <= 8; i++) {
+      const a = -2.25 + (i / 8) * 1.35;
+      bx.strokeStyle = i > 6 ? 'rgba(217,109,90,.8)' : 'rgba(154,163,156,.5)';
+      bx.lineWidth = (i % 2 === 0 ? 1.6 : 1) * px;
+      bx.beginPath();
+      bx.moveTo(cxp + Math.cos(a) * (r - 4 * px), cyp + Math.sin(a) * (r - 4 * px));
+      bx.lineTo(cxp + Math.cos(a) * (r + 3 * px), cyp + Math.sin(a) * (r + 3 * px));
+      bx.stroke();
+    }
+  }
   function drawMeter(dt) {
     const w = meter.width, h = meter.height;
     const px = LP.DPR();
     mx.clearRect(0, 0, w, h);
-    /* scale arc */
+    if (meterBg) mx.drawImage(meterBg, 0, 0);
     const cxp = w / 2, cyp = h * 1.32, r = h * 1.05;
-    mx.strokeStyle = '#2b332e'; mx.lineWidth = px;
-    mx.beginPath(); mx.arc(cxp, cyp, r, -2.25, -0.9); mx.stroke();
-    for (let i = 0; i <= 8; i++) {
-      const a = -2.25 + (i / 8) * 1.35;
-      mx.strokeStyle = i > 6 ? 'rgba(217,109,90,.8)' : 'rgba(154,163,156,.5)';
-      mx.lineWidth = (i % 2 === 0 ? 1.6 : 1) * px;
-      mx.beginPath();
-      mx.moveTo(cxp + Math.cos(a) * (r - 4 * px), cyp + Math.sin(a) * (r - 4 * px));
-      mx.lineTo(cxp + Math.cos(a) * (r + 3 * px), cyp + Math.sin(a) * (r + 3 * px));
-      mx.stroke();
-    }
     /* frame-rate-independent ballistics; reduced motion snaps honestly */
     needle = LP.rm.matches ? LP.audio.smeter
       : LP.audio.smeter + (needle - LP.audio.smeter) * Math.exp(-(dt || 16) / 110);
@@ -1890,34 +2015,42 @@ LP.display = (() => {
     mx.stroke();
   }
 
-  /* ---------- the RTTY decoder: the sub-line types what THE FORECAST sends ---------- */
-  let lastDecode = 0, decoding = false;
+  /* ---------- the decoder: the sub-line types what the lock is sending ---------- */
+  const subEl = document.getElementById('sub-line');
+  let lastDecode = 0, decoding = false, rttySt = null;
   function decodeTicker(t) {
     if (t - lastDecode < 160) return;
     lastDecode = t;
-    const subEl = document.getElementById('sub-line');
     if (!subEl) return;
     const lock = LP.log.lockedOn;
     if (lock === 'THE FORECAST') {
-      const st = LP.band.stations.find(s => s.type === 'rtty');
-      const m = t % 34000;
-      if (m < 30000) {
-        const n = Math.floor(m / 1000 * 6);
-        const txt = st.text;
-        const from = Math.max(0, n - 42);
-        subEl.textContent = txt.slice(from, n % (txt.length + 1)) || '·';
+      /* the model owns the schedule; the masthead only types what it is told.
+         An idle carrier types nothing — but stays a decoder, not a slogan. */
+      rttySt = rttySt || LP.band.stations.find(s => s.type === 'rtty');
+      const s = rttySt.window(t, 42);
+      subEl.textContent = s === null ? '·' : (s || '·');
+      decoding = true;
+      return;
+    } else if (lock) {
+      const st = LP.band.stations.find(s => s.id === lock);
+      if (st && st.type === 'sstv') {
+        /* the picture is not morse: while it paints, the masthead says so,
+           and during the ident it decodes IN PHASE with the keying */
+        const prog = st.prog(t);
+        if (prog >= 0) { subEl.textContent = `PICTURE ${Math.floor(prog * 100)}%`; decoding = true; return; }
+        const identT = (t % st.PERIOD) - st.TX - 8000;
+        subEl.textContent = (identT > 0 && identT < 32000)
+          ? (LP.band.decodeMorse(st._m, identT % st._m.total).slice(-44) || '·') : '·';
         decoding = true;
         return;
       }
-    } else if (lock) {
       /* lock any CW station and the masthead becomes the decoder — the text
          appears character by character, in sync with the keying you hear.
          It decodes whatever is actually on the air: during a cross-read the
          sub-line types the WRONG ident under the right nameplate. */
-      const st = LP.band.stations.find(s => s.id === lock);
       if (st && st._m && st._m.chars) {
         const k = st.keyed ? st.keyed(t) : { m: st._m, off: t };
-        const s = LP.band.decodeMorse(k.m, k.off % k.m.total);
+        const s = LP.band.decodeMorse(k.m, k.off % k.m.total).replace(/%/g, 'SK');
         subEl.textContent = s.slice(-44) || '·';
         decoding = true;
         return;
@@ -1927,13 +2060,20 @@ LP.display = (() => {
   }
 
   /* ---------- readout ---------- */
-  let lastShown = '', lastLock = null;
+  const lockbar = document.getElementById('lockbar');
+  let lastShown = -1, lastLock = null, lastProg = -1;
   function readout() {
     const v = LP.rx.vfo;
-    const s = `${Math.floor(v / 1000)} ${String(Math.floor(v % 1000)).padStart(3, '0')}.${Math.floor((v * 10) % 10)}`;
-    if (s !== lastShown) {
-      lastShown = s;
+    const vi = Math.round(v * 10); /* cheap change check before any string work */
+    if (vi !== lastShown) {
+      lastShown = vi;
+      const s = `${Math.floor(v / 1000)} ${String(Math.floor(v % 1000)).padStart(3, '0')}.${Math.floor((v * 10) % 10)}`;
       freqEl.innerHTML = `${s} <span class="khz">kHz</span>`;
+    }
+    /* the pencil line: holding a signal visibly draws its log entry */
+    if (lockbar) {
+      const p = Math.round((LP.log.lockProgress || 0) * 100);
+      if (p !== lastProg) { lastProg = p; lockbar.style.width = p + '%'; }
     }
     const lock = LP.log.lockedOn;
     if (lock !== lastLock) {
@@ -1960,6 +2100,7 @@ LP.display = (() => {
     const mr = meter.getBoundingClientRect();
     meter.width = Math.round(mr.width * px);
     meter.height = Math.round(mr.height * px);
+    meterScale();
     dirty = true;
     LP.ticker.kick();
   }
@@ -2026,6 +2167,7 @@ LP.display = (() => {
   function boot() {
     const saved = LP.store.get('span', 48);
     if (LP.SPANS.includes(saved)) LP.rx.span = saved;
+    if (LP.reflectZoom) LP.reflectZoom(); /* the chip tells the truth on return visits too */
     resize();
     LP.ticker.add(loop);
   }
@@ -2241,7 +2383,7 @@ LP.sstv = (() => {
         cx.globalAlpha = 1;
         painted = target - 2;
       }
-      let budget = 16; /* the film develops; it never hitches a frame */
+      let budget = 32; /* thirty-two lines at a time, as the card advertises */
       while (painted < target && budget-- > 0) {
         const y = painted;
         /* a badly tuned line comes in skewed and snowy */
@@ -2276,11 +2418,11 @@ LP.sstv = (() => {
       /* the live scan line glows */
       cx.fillStyle = 'rgba(111,221,139,.8)';
       cx.fillRect(0, Math.min(H - 1, target), W, 1);
-      pctEl.textContent = `${Math.floor(prog * 100)}%`;
-      idEl.textContent = 'POSTCARD · 9430';
+      const pct = `${Math.floor(prog * 100)}%`;
+      if (pctEl.textContent !== pct) pctEl.textContent = pct;
+      if (idEl.textContent !== 'POSTCARD · 9430') idEl.textContent = 'POSTCARD · 9430';
     } else if (tuned && prog < 0) {
-      idEl.textContent = 'POSTCARD · IDENT';
-      pctEl.textContent = '';
+      if (idEl.textContent !== 'POSTCARD · IDENT') { idEl.textContent = 'POSTCARD · IDENT'; pctEl.textContent = ''; }
       lastSeen = t;
     }
     const open = (t - lastSeen < 9000 && painted > 0) || (tuned && prog >= 0);
@@ -2322,8 +2464,8 @@ LP.sstv = (() => {
       }
     }
     LP.rx.vfo = lastVfo[LP.rx.band];
-    reflectBand();
   }
+  reflectBand(); /* the chips tell the truth on the FIRST visit too */
 
   function persist() {
     lastVfo[LP.rx.band] = LP.rx.vfo;
@@ -2338,7 +2480,8 @@ LP.sstv = (() => {
     const dur = performance.now() - dwellRec.t0;
     if (dur > 20000) {
       const key = String(Math.round(dwellRec.f));
-      const tr = LP.store.get('trace', {});
+      let tr = LP.store.get('trace', {});
+      if (!tr || typeof tr !== 'object' || Array.isArray(tr)) tr = {}; /* a poisoned trace must never jam the dial */
       tr[key] = Math.min(3600000, (Number(tr[key]) || 0) + dur);
       const keep = Object.keys(tr).sort((a, b) => tr[b] - tr[a]).slice(0, 8);
       const slim = {};
@@ -2350,6 +2493,7 @@ LP.sstv = (() => {
 
   function reflectDial() {
     const B = LP.band.BANDS[LP.rx.band];
+    dial.setAttribute('aria-valuemax', String(Math.round(B.hi - B.lo))); /* the band defines the slider, not a constant */
     dial.setAttribute('aria-valuenow', String(Math.round(LP.rx.vfo - B.lo)));
     const lock = LP.log && LP.log.lockedOn;
     dial.setAttribute('aria-valuetext', `${LP.rx.vfo.toFixed(1)} kilohertz${lock ? ' — signal: ' + lock : ''}`);
@@ -2382,6 +2526,8 @@ LP.sstv = (() => {
   function setBand(ix) {
     if (ix === LP.rx.band) return;
     dialDrag = null; glassDrag = null; stopCoast(); /* a band jump ends any drag or coast in flight */
+    const gh = LP.band.ghost;
+    if (gh.state !== 'asleep' && gh.state !== 'gone') gh.state = 'asleep'; /* the relay slams; it loses the scent */
     lastVfo[LP.rx.band] = LP.rx.vfo;
     LP.rx.band = ix;
     reflectBand();
@@ -2449,22 +2595,6 @@ LP.sstv = (() => {
   dial.addEventListener('pointercancel', dialUp);
   dial.addEventListener('lostpointercapture', dialUp);
 
-  dial.addEventListener('keydown', (e) => {
-    const B = LP.band.BANDS[LP.rx.band];
-    switch (e.key) {
-      case 'ArrowLeft': tuneTo(LP.rx.vfo - 0.1); break;
-      case 'ArrowRight': tuneTo(LP.rx.vfo + 0.1); break;
-      case 'ArrowDown': tuneTo(LP.rx.vfo - 1); break;
-      case 'ArrowUp': tuneTo(LP.rx.vfo + 1); break;
-      case 'PageDown': tuneTo(LP.rx.vfo - 5); break;
-      case 'PageUp': tuneTo(LP.rx.vfo + 5); break;
-      case 'Home': tuneTo(B.lo); break;
-      case 'End': tuneTo(B.hi); break;
-      default: return;
-    }
-    e.preventDefault();
-  });
-
   /* ---------- the glass: grab the spectrum itself ---------- */
   let glassDrag = null;
   glass.addEventListener('pointerdown', (e) => {
@@ -2483,21 +2613,33 @@ LP.sstv = (() => {
     glassDrag = { id: e.pointerId, x: e.clientX, vfo: LP.rx.vfo, w: r.width };
   });
   glass.addEventListener('pointermove', (e) => {
-    if (!glassDrag || e.pointerId !== glassDrag.id) return;
+    if (!glassDrag || e.pointerId !== glassDrag.id) {
+      /* idle hover: the ribbon strip advertises that it can be tapped */
+      const r = glass.getBoundingClientRect();
+      if (r.height) glass.style.cursor = (e.clientY - r.top) / r.height < 0.08 ? 'pointer' : '';
+      return;
+    }
     const dx = e.clientX - glassDrag.x;
     tuneTo(glassDrag.vfo - dx * (LP.display.WIN / glassDrag.w), true);
   });
   const glassUp = (e) => { if (glassDrag && e.pointerId === glassDrag.id) glassDrag = null; };
   glass.addEventListener('pointerup', glassUp);
   glass.addEventListener('pointercancel', glassUp);
+  glass.addEventListener('lostpointercapture', glassUp);
 
-  /* fine tuning: the wheel, anywhere over the rig */
+  /* fine tuning: the wheel, anywhere over the rig. Scroll distance is
+     ACCUMULATED so a trackpad's stream of tiny deltas turns the dial one
+     0.1 kHz notch per ~40px instead of one notch per event. */
+  let wheelAcc = 0;
   for (const el of [glass, dial]) {
     el.addEventListener('wheel', (e) => {
       e.preventDefault();
       if (LP.dismissCardSoft) LP.dismissCardSoft();
-      const step = e.shiftKey ? 1 : 0.1;
-      tuneTo(LP.rx.vfo + (e.deltaY > 0 ? -step : step));
+      wheelAcc += e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY; /* line-mode wheels count in lines */
+      const notches = Math.trunc(wheelAcc / 40);
+      if (!notches) return;
+      wheelAcc -= notches * 40;
+      tuneTo(LP.rx.vfo - notches * (e.shiftKey ? 1 : 0.1));
     }, { passive: false });
   }
 
@@ -2536,10 +2678,14 @@ LP.sstv = (() => {
   const cardClose = document.getElementById('card-close');
   let cardAuto = false;
   function showCard(open, stealFocus = true) {
+    const wasOpen = !card.hidden;
     card.hidden = !open;
     cardBtn.setAttribute('aria-expanded', String(open));
     cardAuto = open && !stealFocus;
     if (open && stealFocus) cardClose.focus();
+    /* a deliberate close hands focus back to the chip that opened it; a soft
+       dismissal (hands already on the dial) steals nothing */
+    else if (!open && wasOpen && stealFocus) cardBtn.focus();
   }
   /* the card excuses itself the moment you start operating the set */
   LP.dismissCardSoft = () => { if (cardAuto && !card.hidden) showCard(false, false); };
@@ -2547,18 +2693,28 @@ LP.sstv = (() => {
   cardClose.addEventListener('click', () => showCard(false));
   LP.showCard = showCard;
 
-  /* ---------- bare keys ---------- */
+  /* ---------- the keys: ONE map, live from any focus ---------- */
+  /* The set is the instrument; the keys work wherever your hands are. Browser
+     and OS chords pass through untouched, and Enter/Space still belong to
+     whatever chip is focused. */
   addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return; /* never hijack a chord */
     if (e.key === 'Escape' && !card.hidden) { showCard(false); return; }
     if (e.key === 'Escape' && !document.getElementById('logbook').hidden) { toggleLog(false); return; }
-    if (e.target instanceof HTMLElement && ['BUTTON', 'INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
-    if (e.target === dial) return; /* the dial has its own map */
-    if (dialDrag || glassDrag) return; /* no band jumps mid-drag */
+    const el = e.target instanceof HTMLElement ? e.target : null;
+    if (el && (['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) || el.isContentEditable)) return;
+    if (el && el.tagName === 'BUTTON' && (e.key === 'Enter' || e.key === ' ')) return;
+    if (dialDrag || glassDrag) return; /* no jumps mid-drag */
+    const B = LP.band.BANDS[LP.rx.band];
     switch (e.key) {
       case 'ArrowLeft': tuneTo(LP.rx.vfo - 0.1); break;
       case 'ArrowRight': tuneTo(LP.rx.vfo + 0.1); break;
       case 'ArrowDown': tuneTo(LP.rx.vfo - 1); break;
       case 'ArrowUp': tuneTo(LP.rx.vfo + 1); break;
+      case 'PageDown': tuneTo(LP.rx.vfo - 5); break;
+      case 'PageUp': tuneTo(LP.rx.vfo + 5); break;
+      case 'Home': tuneTo(B.lo); break;
+      case 'End': tuneTo(B.hi); break;
       case '1': setBand(0); break;
       case '2': setBand(1); break;
       case '3': setBand(2); break;
@@ -2609,7 +2765,7 @@ LP.log = (() => {
     const st = LP.band.stations.find(s => s.id === id);
     if (!st) return '';
     const off = Math.abs(LP.rx.vfo - st.f);
-    const sel = Math.exp(-(off * off) / (2 * Math.pow(Math.max(st.bw, 0.35) * 0.9, 2)));
+    const sel = LP.selectivity(off, st.bw);
     const s = LP.clamp(Math.round(1 + LP.band.strength(st, t) * sel * 8), 1, 9);
     const r = LP.clamp(Math.round(2 + sel * 3), 1, 5);
     const cw = st.type === 'beacon' || st.type === 'crossing' || st.type === 'constant';
@@ -2693,6 +2849,10 @@ LP.log = (() => {
   /* a reload inside the 9s window must not eat the capstone entry */
   if (netDone && !seen.has('ALL STATIONS')) add('ALL STATIONS', 0, 'the net acknowledged you', 'net');
 
+  /* it asked who was there. ONCE. A visitor it has already met is never
+     stalked again — the book remembers, so the band remembers. */
+  if (seen.has('THE OTHER')) LP.band.ghost.state = 'gone';
+
   /* lock detection: near a station's carrier, signal present, held ~4s */
   function check(t) {
     let candidate = null;
@@ -2725,6 +2885,11 @@ LP.log = (() => {
     /* the lock light means SIGNAL, not proximity: a station in its dead
        window doesn't light the readout */
     get lockedOn() { return (lockedOn && lastCheckT - lastActive < 3000) ? lockedOn.id : null; },
+    /* how far along the pencil is: 0..1 across the hold that logs a NEW station */
+    get lockProgress() {
+      if (!lockedOn || seen.has(lockedOn.id) || lastCheckT - lastActive >= 3000) return 0;
+      return LP.clamp((lastCheckT - lockT0) / 4200, 0, 1);
+    },
   };
 })();
 
@@ -2736,22 +2901,28 @@ LP.log = (() => {
     if (!LP.rm.matches) document.body.classList.add('arriving');
 
     LP.display.boot();
+    const landing = LP.rx.vfo; /* where the set settles — captured before any glide rewinds the dial */
 
     /* the engine is alive: hand the controls over */
     document.querySelectorAll('button[disabled]').forEach(b => { b.disabled = false; });
 
-    if (!LP.rm.matches) {
-      setTimeout(() => document.body.classList.remove('arriving'), 900);
-      /* first visit only: the operator's card is clipped to the rig, and the
-         set glides the last nudge into the music — the dial teaches itself */
-      if (!LP.store.get('visited', false)) {
-        LP.store.set('visited', true);
-        setTimeout(() => { if (LP.showCard) LP.showCard(true, false); }, 1200);
+    if (!LP.rm.matches) setTimeout(() => document.body.classList.remove('arriving'), 900);
+
+    /* first visit only: the operator's card is clipped to the rig — for EVERY
+       first visitor, moving or still — and (motion permitting) the set glides
+       the last nudge into the music, so the dial teaches itself */
+    if (!LP.store.get('visited', false)) {
+      LP.store.set('visited', true);
+      setTimeout(() => { if (LP.showCard) LP.showCard(true, false); }, 1200);
+      if (!LP.rm.matches) {
         const from = LP.rx.vfo - 9, to = LP.rx.vfo;
         const t0 = performance.now();
+        let lastSet = from;
         const glide = () => {
+          if (Math.abs(LP.rx.vfo - lastSet) > 0.001) return false; /* the visitor took the dial: theirs */
           const p = Math.min(1, (performance.now() - t0) / 2600);
-          LP.rx.vfo = from + (to - from) * (1 - Math.pow(1 - p, 3));
+          lastSet = from + (to - from) * (1 - Math.pow(1 - p, 3));
+          LP.rx.vfo = lastSet;
           if (LP.display.invalidateRow) LP.display.invalidateRow();
           if (p < 1) return; /* stay in the ticker till landed */
           LP.rx.dwellT0 = performance.now();
@@ -2764,7 +2935,7 @@ LP.log = (() => {
     }
 
     setTimeout(() => {
-      LP.say(`A shortwave receiver, three bands. Arrow keys tune; 1, 2, 3 change band; L opens the station log. Currently ${LP.rx.vfo.toFixed(1)} kilohertz.`);
+      LP.say(`A shortwave receiver, three bands. Arrow keys tune; 1, 2, 3 change band; L opens the station log. Currently ${landing.toFixed(1)} kilohertz.`);
     }, 1400);
   } catch (err) {
     console.error(err);

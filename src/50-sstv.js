@@ -205,7 +205,7 @@ LP.sstv = (() => {
         cx.globalAlpha = 1;
         painted = target - 2;
       }
-      let budget = 16; /* the film develops; it never hitches a frame */
+      let budget = 32; /* thirty-two lines at a time, as the card advertises */
       while (painted < target && budget-- > 0) {
         const y = painted;
         /* a badly tuned line comes in skewed and snowy */
@@ -240,11 +240,11 @@ LP.sstv = (() => {
       /* the live scan line glows */
       cx.fillStyle = 'rgba(111,221,139,.8)';
       cx.fillRect(0, Math.min(H - 1, target), W, 1);
-      pctEl.textContent = `${Math.floor(prog * 100)}%`;
-      idEl.textContent = 'POSTCARD · 9430';
+      const pct = `${Math.floor(prog * 100)}%`;
+      if (pctEl.textContent !== pct) pctEl.textContent = pct;
+      if (idEl.textContent !== 'POSTCARD · 9430') idEl.textContent = 'POSTCARD · 9430';
     } else if (tuned && prog < 0) {
-      idEl.textContent = 'POSTCARD · IDENT';
-      pctEl.textContent = '';
+      if (idEl.textContent !== 'POSTCARD · IDENT') { idEl.textContent = 'POSTCARD · IDENT'; pctEl.textContent = ''; }
       lastSeen = t;
     }
     const open = (t - lastSeen < 9000 && painted > 0) || (tuned && prog >= 0);

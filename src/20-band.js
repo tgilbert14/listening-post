@@ -19,6 +19,7 @@ LP.band = (() => {
     Q: '--.-', R: '.-.', S: '...', T: '-', U: '..-', V: '...-', W: '.--', X: '-..-',
     Y: '-.--', Z: '--..', 0: '-----', 1: '.----', 2: '..---', 3: '...--', 4: '....-',
     5: '.....', 6: '-....', 7: '--...', 8: '---..', 9: '----.', '?': '..--..', '/': '-..-.',
+    '%': '...-.-', /* the SK prosign, sent as one character: end of contact */
   };
   /* compile text -> [ [onMs, offMs], ... ] repeating pattern + total length */
   function compileMorse(text, wpm, tailMs) {
@@ -79,9 +80,12 @@ LP.band = (() => {
   }
 
   /* ---------- the day's numbers ---------- */
+  /* local calendar date, UTC arithmetic: the seed rolls at local midnight and
+     never drifts an hour across a DST change */
   const daySeed = () => {
     const d = new Date();
-    return d.getFullYear() * 1000 + Math.floor((d - new Date(d.getFullYear(), 0, 0)) / 86400000);
+    return d.getFullYear() * 1000
+      + Math.round((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - Date.UTC(d.getFullYear(), 0, 1)) / 86400000) + 1;
   };
   function latticeGroups() {
     const rnd = LP.mulberry(daySeed());
@@ -117,10 +121,11 @@ LP.band = (() => {
   net.arm = () => {
     net.m = present()
       ? compileMorse('73 73 73', 14, 2600)
-      : humanize(compileMorse('73 73 SK', 14, 2600), LP.mulberry(4257), 1200 / 14);
+      : humanize(compileMorse('73 73 %', 14, 2600), LP.mulberry(4257), 1200 / 14);
     net.t0 = Date.now();
     net.until = net.t0 + net.m.total;
   };
+  const netActive = (t) => t >= net.t0 && t < net.until;
 
   /* THE CROSS-READ: some nights, for one message, a beacon keys its sister's
      ident — the wrong mask, once, corrected next cycle. Never after. */
@@ -147,9 +152,12 @@ LP.band = (() => {
     return { m: c.vic._m, off: t - c.w0 };
   }
 
+  /* every beacon keeper has a FIST — a seeded, repeatable wobble, a hand you
+     could learn to recognize. THE CONSTANT alone keys machine-perfect: the one
+     hand on the band that does not wobble is the tell. */
   const beacon = (id, f, band, text, wpm, pitchBias, note) => S.push({
     id, name: id, f, band, type: 'beacon', bw: 0.12, wpm, pitchBias, note,
-    _m: compileMorse(text, wpm, 2200), text,
+    _m: humanize(compileMorse(text, wpm, 2200), LP.mulberry((f * 37) | 0), 1200 / wpm), text,
     /* which compiled pattern is on the air right now: the net outranks the
        masks (the unison is the tenant's own voice), the mask outranks habit */
     keyed(t) {
@@ -189,7 +197,8 @@ LP.band = (() => {
         this._traceDay = false;
         /* the group that is about you: rare, seeded, deniable */
         if (present() && LP.mulberry(s + 99)() < 0.25) {
-          const tr = LP.store.get('trace', {});
+          let tr = LP.store.get('trace', {});
+          if (!tr || typeof tr !== 'object' || Array.isArray(tr)) tr = {}; /* a poisoned trace stays a rumor */
           const top = Object.keys(tr).sort((a, b) => tr[b] - tr[a])[0];
           if (top) {
             this._traceDay = true;
@@ -226,6 +235,7 @@ LP.band = (() => {
       return { mode: 'gap' };
     },
     activity(t) {
+      if (netActive(t)) return morseOn(net.m, t - net.t0) ? 1 : 0; /* the buzzer, keying morse: once */
       const p = this.phase(t);
       if (p.mode === 'musicbox') return p.on ? 0.7 : 0.12;
       return p.on ? 1 : (p.mode === 'gap' ? 0 : 0.12);
@@ -259,12 +269,26 @@ LP.band = (() => {
     note: 'the weather for places without weather stations',
     text: 'SECTOR ONE CLEAR WIND LIGHT SW DUST RISING BY DAWN + SECTOR TWO STILL AIR MOONSET 0341 + SECTOR THREE HEAT LOW GOOD PASSAGE + ALL SECTORS THE BAND IS OPEN + ',
     baud: 45.45,
-    activity(t) { const m = t % 34000; return m < 30000 ? 1 : 0; },
+    cps: 6, /* display pace ≈ true 45.45-baud Baudot character rate */
+    activity(t) {
+      if (netActive(t)) return morseOn(net.m, t - net.t0) ? 1 : 0;
+      const m = t % 34000;
+      return m < 30000 ? 1 : 0;
+    },
     charAt(t) {
       const m = t % 34000;
       if (m >= 30000) return null;
-      const cps = 6; /* display pace, characters per second */
-      return this.text[Math.floor(m / 1000 * cps) % this.text.length];
+      return this.text[Math.floor(m / 1000 * this.cps) % this.text.length];
+    },
+    /* the decoder's window: the last `span` characters finished by time t.
+       Null when the carrier is idle. The schedule lives HERE, with the model. */
+    window(t, span) {
+      const m = t % 34000;
+      if (m >= 30000) return null;
+      const n = Math.floor(m / 1000 * this.cps);
+      let s = '';
+      for (let i = Math.max(0, n - span); i < n; i++) s += this.text[i % this.text.length];
+      return s;
     },
   });
 
@@ -272,7 +296,11 @@ LP.band = (() => {
   S.push({
     id: 'AURORA', name: 'AURORA', f: 6785.0, band: 1, type: 'music', bw: 4.2,
     note: 'someone, somewhere, is playing records',
-    activity(t) { const m = t % 52000; return m < 47000 ? 1 : 0.15; },
+    activity(t) {
+      if (netActive(t)) return morseOn(net.m, t - net.t0) ? 1 : 0; /* the record stops for this */
+      const m = t % 52000;
+      return m < 47000 ? 1 : 0.15;
+    },
   });
 
   /* HOMECOMING: only after dark, local. Eleven slow tones. */
@@ -281,6 +309,7 @@ LP.band = (() => {
     note: 'eleven tones, only after dark',
     isOn() { const h = new Date().getHours(); return h >= 21 || h < 6; },
     activity(t) {
+      if (netActive(t)) return morseOn(net.m, t - net.t0) ? 1 : 0; /* even in daylight: once */
       if (!this.isOn()) return 0;
       const m = t % 26000;
       const ix = Math.floor(m / 2000);
@@ -298,6 +327,7 @@ LP.band = (() => {
     PERIOD: 360000, TX: 200000,
     prog(t) { const m = t % this.PERIOD; return m < this.TX ? m / this.TX : -1; },
     activity(t) {
+      if (netActive(t)) return morseOn(net.m, t - net.t0) ? 1 : 0; /* the picture can wait */
       const m = t % this.PERIOD;
       if (m < this.TX) return 1;
       if (m > this.TX + 8000 && m < this.TX + 40000) return morseOn(this._m, m - this.TX - 8000) ? 1 : 0;
@@ -317,6 +347,7 @@ LP.band = (() => {
       return night && LP.mulberry(daySeed() + 777)() < 0.28;
     },
     activity(t) {
+      if (netActive(t)) return morseOn(net.m, t - net.t0) ? 1 : 0; /* the bell keeps the rhythm too */
       if (!this.isOn()) return 0;
       const m = t % 46000;
       if (m > 34000) return 0;                       /* it fades between rings */
@@ -378,7 +409,7 @@ LP.band = (() => {
             ? compileMorse(`${other} DE ${call} R R TNX FER RPRT 73`, m.wpm, 6000 + rnd() * 8000)
             : compileMorse(`CQ CQ DE ${call} ${call} K`, m.wpm, 4000 + rnd() * 9000);
           /* every human hand has a fist — a repeatable timing wobble, visible
-             at the 12 kHz zoom. The named beacons key clean (they are
+             at the 12 kHz zoom. The named beacons wobble too (keepers, not
              machines); the one signal with NO fist and NO fade is the tell. */
           humanize(m._m, rnd, 1200 / m.wpm);
         }
@@ -422,7 +453,7 @@ LP.band = (() => {
       + 0.10 * Math.sin(t / 2300 + seed * 1.7);
   }
   function strength(st, t) {
-    if (st.isOn && !st.isOn()) return 0;   /* any station may keep its own hours */
+    if (st.isOn && !st.isOn() && !netActive(t)) return 0;   /* its own hours — except for the net, once */
     /* THE CONSTANT, while the tenant is present, has no distance: no QSB, no
        day/night curve, the same strength for every listener on Earth. Every
        log of it carries the identical report. Afterward, it fades like
@@ -579,7 +610,7 @@ LP.band = (() => {
 
   return {
     BANDS, stations: S, strength, spectrumRow, ghost, latticeGroups,
-    compileMorse, morseOn, decodeMorse, sferic, net, keyEdges,
+    compileMorse, morseOn, decodeMorse, sferic, net, netActive, keyEdges,
     minors, minorActive, minorF, minorStrength,
     present, roomEvent, crossRead,
   };

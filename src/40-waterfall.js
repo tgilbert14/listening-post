@@ -139,37 +139,47 @@ LP.display = (() => {
     const first = Math.ceil(fLo / step) * step;
     for (let f = first; f < fLo + win; f += step) {
       const x = (f - fLo) / win * w;
-      cx.fillStyle = 'rgba(154,163,156,.25)';
+      cx.fillStyle = 'rgba(154,163,156,.4)';
       cx.fillRect(x, wfY + wfH, px, 5 * px);
-      cx.fillStyle = 'rgba(154,163,156,.55)';
+      cx.fillStyle = 'rgba(154,163,156,.8)';
       cx.fillText(String(f), x, h - 5);
     }
     /* span badge: tell the operator how wide the window is */
     cx.textAlign = 'right';
-    cx.fillStyle = 'rgba(217,164,65,.6)';
+    cx.fillStyle = 'rgba(217,164,65,.85)';
     cx.font = `${Math.max(8, h * 0.024)}px Consolas, monospace`;
     cx.fillText(`SPAN ${win} kHz`, w - 6, wfY + 12 * px);
   }
 
   /* ---------- S-meter ---------- */
-  let needle = 0;
+  /* the scale never changes between resizes: paint it once, blit it forever */
+  let needle = 0, meterBg = null;
+  function meterScale() {
+    const w = meter.width, h = meter.height;
+    if (!w) return;
+    if (!meterBg) meterBg = document.createElement('canvas');
+    meterBg.width = w; meterBg.height = h;
+    const bx = meterBg.getContext('2d');
+    const px = LP.DPR();
+    const cxp = w / 2, cyp = h * 1.32, r = h * 1.05;
+    bx.strokeStyle = '#2b332e'; bx.lineWidth = px;
+    bx.beginPath(); bx.arc(cxp, cyp, r, -2.25, -0.9); bx.stroke();
+    for (let i = 0; i <= 8; i++) {
+      const a = -2.25 + (i / 8) * 1.35;
+      bx.strokeStyle = i > 6 ? 'rgba(217,109,90,.8)' : 'rgba(154,163,156,.5)';
+      bx.lineWidth = (i % 2 === 0 ? 1.6 : 1) * px;
+      bx.beginPath();
+      bx.moveTo(cxp + Math.cos(a) * (r - 4 * px), cyp + Math.sin(a) * (r - 4 * px));
+      bx.lineTo(cxp + Math.cos(a) * (r + 3 * px), cyp + Math.sin(a) * (r + 3 * px));
+      bx.stroke();
+    }
+  }
   function drawMeter(dt) {
     const w = meter.width, h = meter.height;
     const px = LP.DPR();
     mx.clearRect(0, 0, w, h);
-    /* scale arc */
+    if (meterBg) mx.drawImage(meterBg, 0, 0);
     const cxp = w / 2, cyp = h * 1.32, r = h * 1.05;
-    mx.strokeStyle = '#2b332e'; mx.lineWidth = px;
-    mx.beginPath(); mx.arc(cxp, cyp, r, -2.25, -0.9); mx.stroke();
-    for (let i = 0; i <= 8; i++) {
-      const a = -2.25 + (i / 8) * 1.35;
-      mx.strokeStyle = i > 6 ? 'rgba(217,109,90,.8)' : 'rgba(154,163,156,.5)';
-      mx.lineWidth = (i % 2 === 0 ? 1.6 : 1) * px;
-      mx.beginPath();
-      mx.moveTo(cxp + Math.cos(a) * (r - 4 * px), cyp + Math.sin(a) * (r - 4 * px));
-      mx.lineTo(cxp + Math.cos(a) * (r + 3 * px), cyp + Math.sin(a) * (r + 3 * px));
-      mx.stroke();
-    }
     /* frame-rate-independent ballistics; reduced motion snaps honestly */
     needle = LP.rm.matches ? LP.audio.smeter
       : LP.audio.smeter + (needle - LP.audio.smeter) * Math.exp(-(dt || 16) / 110);
@@ -181,34 +191,42 @@ LP.display = (() => {
     mx.stroke();
   }
 
-  /* ---------- the RTTY decoder: the sub-line types what THE FORECAST sends ---------- */
-  let lastDecode = 0, decoding = false;
+  /* ---------- the decoder: the sub-line types what the lock is sending ---------- */
+  const subEl = document.getElementById('sub-line');
+  let lastDecode = 0, decoding = false, rttySt = null;
   function decodeTicker(t) {
     if (t - lastDecode < 160) return;
     lastDecode = t;
-    const subEl = document.getElementById('sub-line');
     if (!subEl) return;
     const lock = LP.log.lockedOn;
     if (lock === 'THE FORECAST') {
-      const st = LP.band.stations.find(s => s.type === 'rtty');
-      const m = t % 34000;
-      if (m < 30000) {
-        const n = Math.floor(m / 1000 * 6);
-        const txt = st.text;
-        const from = Math.max(0, n - 42);
-        subEl.textContent = txt.slice(from, n % (txt.length + 1)) || '·';
+      /* the model owns the schedule; the masthead only types what it is told.
+         An idle carrier types nothing — but stays a decoder, not a slogan. */
+      rttySt = rttySt || LP.band.stations.find(s => s.type === 'rtty');
+      const s = rttySt.window(t, 42);
+      subEl.textContent = s === null ? '·' : (s || '·');
+      decoding = true;
+      return;
+    } else if (lock) {
+      const st = LP.band.stations.find(s => s.id === lock);
+      if (st && st.type === 'sstv') {
+        /* the picture is not morse: while it paints, the masthead says so,
+           and during the ident it decodes IN PHASE with the keying */
+        const prog = st.prog(t);
+        if (prog >= 0) { subEl.textContent = `PICTURE ${Math.floor(prog * 100)}%`; decoding = true; return; }
+        const identT = (t % st.PERIOD) - st.TX - 8000;
+        subEl.textContent = (identT > 0 && identT < 32000)
+          ? (LP.band.decodeMorse(st._m, identT % st._m.total).slice(-44) || '·') : '·';
         decoding = true;
         return;
       }
-    } else if (lock) {
       /* lock any CW station and the masthead becomes the decoder — the text
          appears character by character, in sync with the keying you hear.
          It decodes whatever is actually on the air: during a cross-read the
          sub-line types the WRONG ident under the right nameplate. */
-      const st = LP.band.stations.find(s => s.id === lock);
       if (st && st._m && st._m.chars) {
         const k = st.keyed ? st.keyed(t) : { m: st._m, off: t };
-        const s = LP.band.decodeMorse(k.m, k.off % k.m.total);
+        const s = LP.band.decodeMorse(k.m, k.off % k.m.total).replace(/%/g, 'SK');
         subEl.textContent = s.slice(-44) || '·';
         decoding = true;
         return;
@@ -218,13 +236,20 @@ LP.display = (() => {
   }
 
   /* ---------- readout ---------- */
-  let lastShown = '', lastLock = null;
+  const lockbar = document.getElementById('lockbar');
+  let lastShown = -1, lastLock = null, lastProg = -1;
   function readout() {
     const v = LP.rx.vfo;
-    const s = `${Math.floor(v / 1000)} ${String(Math.floor(v % 1000)).padStart(3, '0')}.${Math.floor((v * 10) % 10)}`;
-    if (s !== lastShown) {
-      lastShown = s;
+    const vi = Math.round(v * 10); /* cheap change check before any string work */
+    if (vi !== lastShown) {
+      lastShown = vi;
+      const s = `${Math.floor(v / 1000)} ${String(Math.floor(v % 1000)).padStart(3, '0')}.${Math.floor((v * 10) % 10)}`;
       freqEl.innerHTML = `${s} <span class="khz">kHz</span>`;
+    }
+    /* the pencil line: holding a signal visibly draws its log entry */
+    if (lockbar) {
+      const p = Math.round((LP.log.lockProgress || 0) * 100);
+      if (p !== lastProg) { lastProg = p; lockbar.style.width = p + '%'; }
     }
     const lock = LP.log.lockedOn;
     if (lock !== lastLock) {
@@ -251,6 +276,7 @@ LP.display = (() => {
     const mr = meter.getBoundingClientRect();
     meter.width = Math.round(mr.width * px);
     meter.height = Math.round(mr.height * px);
+    meterScale();
     dirty = true;
     LP.ticker.kick();
   }
@@ -317,6 +343,7 @@ LP.display = (() => {
   function boot() {
     const saved = LP.store.get('span', 48);
     if (LP.SPANS.includes(saved)) LP.rx.span = saved;
+    if (LP.reflectZoom) LP.reflectZoom(); /* the chip tells the truth on return visits too */
     resize();
     LP.ticker.add(loop);
   }

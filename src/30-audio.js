@@ -67,8 +67,24 @@ LP.audio = (() => {
     if (ctx.state !== 'running') ctx.resume().then(reflect).catch(reflect);
     else reflect();
   }
+  /* the chip does what it SAID when the visitor pressed it: the state is
+     read at the very START of the gesture, before the gesture itself can arm
+     the context and flip the chip on — so the first click can never silently
+     bank an opt-out the visitor didn't mean. These capture listeners register
+     BEFORE interact's arming ones (module order), so they always run first. */
+  let shownAtPress = null;
+  const notePress = (e) => {
+    if (chip && e.target instanceof Node && chip.contains(e.target)) {
+      shownAtPress = chip.getAttribute('aria-pressed') === 'true';
+    }
+  };
+  addEventListener('pointerdown', notePress, { capture: true });
+  addEventListener('keydown', notePress, { capture: true });
   function toggle() {
-    enabled = !enabled;
+    const shown = shownAtPress !== null ? shownAtPress
+      : (chip && chip.getAttribute('aria-pressed') === 'true');
+    shownAtPress = null;
+    enabled = !shown;
     LP.store.set('sound', enabled);
     if (enabled) { build(); if (ctx) ctx.resume().then(reflect).catch(reflect); LP.say('Sound on.'); }
     else { if (ctx) ctx.suspend(); reflect(); LP.say('Sound off.'); }
@@ -199,11 +215,15 @@ LP.audio = (() => {
       if (st.band !== rx.band) continue;
       const off = rx.vfo - st.f;
       if (Math.abs(off) > 5) continue;
-      const sel = Math.exp(-(off * off) / (2 * Math.pow(Math.max(st.bw, 0.35) * 0.9, 2)));
+      const sel = LP.selectivity(off, st.bw);
       m = Math.max(m, LP.band.strength(st, t) * sel * (0.4 + 0.6 * st.activity(t)));
     }
     const gh = LP.band.ghost;
-    if (gh.state !== 'asleep' && gh.state !== 'gone') m = Math.max(m, gh.strength() * 0.8);
+    if (gh.state !== 'asleep' && gh.state !== 'gone') {
+      /* the needle reads it like any signal: only near its carrier */
+      const gsel = Math.exp(-Math.pow(rx.vfo - gh.f, 2) / 0.5);
+      m = Math.max(m, gh.strength() * 0.8 * gsel);
+    }
     return m;
   }
 
@@ -227,7 +247,7 @@ LP.audio = (() => {
       const act = st.activity(t);
       const str = LP.band.strength(st, t);
       /* selectivity: how much of it lands in the passband */
-      const sel = Math.exp(-(off * off) / (2 * Math.pow(Math.max(st.bw, 0.35) * 0.9, 2)));
+      const sel = LP.selectivity(off, st.bw);
       let vol = act * str * sel;
       if (v.pan) v.pan.pan.setTargetAtTime(LP.clamp((st.f - rx.vfo) / 3.5, -0.75, 0.75), now, 0.08);
 
@@ -333,6 +353,19 @@ LP.audio = (() => {
           v.step++;
         }
       }
+
+      /* the net: while it runs, EVERY named voice keys the same characters at
+         the same moment — each in its own timbre, all in one rhythm. The
+         beacon paths above already schedule it; this covers the rest. */
+      if (LP.band.netActive(t) && st.type !== 'beacon' && st.type !== 'constant') {
+        const lvl = str * sel * 0.28;
+        const gg = v.g.gain;
+        gg.cancelScheduledValues(now);
+        gg.setTargetAtTime(st.activity(t) > 0 ? lvl : 0, now, 0.008);
+        for (const e of LP.band.keyEdges(st, t, t + 330)) {
+          gg.setTargetAtTime(e.on ? lvl : 0, now + Math.max(0.001, (e.t - t) / 1000), 0.008);
+        }
+      }
     }
 
     /* the underbrush within earshot: quiet CW, hets, and hash under the dial */
@@ -370,8 +403,10 @@ LP.audio = (() => {
       const off = Math.abs(LP.rx.vfo - gh.f);
       if (v.pan) v.pan.pan.setTargetAtTime(LP.clamp((gh.f - LP.rx.vfo) / 3.5, -0.75, 0.75), now, 0.08);
       if (gh.state === 'asking') {
+        /* it asks at your ear only if your ear is THERE: the question obeys
+           the passband like any honest carrier */
         v.o.frequency.setTargetAtTime(478, now, 0.02);
-        v.g.gain.setTargetAtTime(gh.activity(t) * 0.24, now, K);
+        v.g.gain.setTargetAtTime(gh.activity(t) * 0.24 * Math.exp(-off * off / 0.5), now, K);
       } else {
         /* heterodyne: the whistle falls as it closes on you */
         const beat = LP.clamp(off * 1000, 24, 2400);
@@ -535,6 +570,7 @@ LP.audio = (() => {
     g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
     o.connect(g).connect(bus);
     o.start(when); o.stop(when + dur + 0.1);
+    o.onended = () => { try { o.disconnect(); g.disconnect(); } catch { } };
   }
 
   LP.relayClunk = relayClunk;

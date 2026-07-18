@@ -25,8 +25,8 @@
       }
     }
     LP.rx.vfo = lastVfo[LP.rx.band];
-    reflectBand();
   }
+  reflectBand(); /* the chips tell the truth on the FIRST visit too */
 
   function persist() {
     lastVfo[LP.rx.band] = LP.rx.vfo;
@@ -41,7 +41,8 @@
     const dur = performance.now() - dwellRec.t0;
     if (dur > 20000) {
       const key = String(Math.round(dwellRec.f));
-      const tr = LP.store.get('trace', {});
+      let tr = LP.store.get('trace', {});
+      if (!tr || typeof tr !== 'object' || Array.isArray(tr)) tr = {}; /* a poisoned trace must never jam the dial */
       tr[key] = Math.min(3600000, (Number(tr[key]) || 0) + dur);
       const keep = Object.keys(tr).sort((a, b) => tr[b] - tr[a]).slice(0, 8);
       const slim = {};
@@ -53,6 +54,7 @@
 
   function reflectDial() {
     const B = LP.band.BANDS[LP.rx.band];
+    dial.setAttribute('aria-valuemax', String(Math.round(B.hi - B.lo))); /* the band defines the slider, not a constant */
     dial.setAttribute('aria-valuenow', String(Math.round(LP.rx.vfo - B.lo)));
     const lock = LP.log && LP.log.lockedOn;
     dial.setAttribute('aria-valuetext', `${LP.rx.vfo.toFixed(1)} kilohertz${lock ? ' — signal: ' + lock : ''}`);
@@ -85,6 +87,8 @@
   function setBand(ix) {
     if (ix === LP.rx.band) return;
     dialDrag = null; glassDrag = null; stopCoast(); /* a band jump ends any drag or coast in flight */
+    const gh = LP.band.ghost;
+    if (gh.state !== 'asleep' && gh.state !== 'gone') gh.state = 'asleep'; /* the relay slams; it loses the scent */
     lastVfo[LP.rx.band] = LP.rx.vfo;
     LP.rx.band = ix;
     reflectBand();
@@ -152,22 +156,6 @@
   dial.addEventListener('pointercancel', dialUp);
   dial.addEventListener('lostpointercapture', dialUp);
 
-  dial.addEventListener('keydown', (e) => {
-    const B = LP.band.BANDS[LP.rx.band];
-    switch (e.key) {
-      case 'ArrowLeft': tuneTo(LP.rx.vfo - 0.1); break;
-      case 'ArrowRight': tuneTo(LP.rx.vfo + 0.1); break;
-      case 'ArrowDown': tuneTo(LP.rx.vfo - 1); break;
-      case 'ArrowUp': tuneTo(LP.rx.vfo + 1); break;
-      case 'PageDown': tuneTo(LP.rx.vfo - 5); break;
-      case 'PageUp': tuneTo(LP.rx.vfo + 5); break;
-      case 'Home': tuneTo(B.lo); break;
-      case 'End': tuneTo(B.hi); break;
-      default: return;
-    }
-    e.preventDefault();
-  });
-
   /* ---------- the glass: grab the spectrum itself ---------- */
   let glassDrag = null;
   glass.addEventListener('pointerdown', (e) => {
@@ -186,21 +174,33 @@
     glassDrag = { id: e.pointerId, x: e.clientX, vfo: LP.rx.vfo, w: r.width };
   });
   glass.addEventListener('pointermove', (e) => {
-    if (!glassDrag || e.pointerId !== glassDrag.id) return;
+    if (!glassDrag || e.pointerId !== glassDrag.id) {
+      /* idle hover: the ribbon strip advertises that it can be tapped */
+      const r = glass.getBoundingClientRect();
+      if (r.height) glass.style.cursor = (e.clientY - r.top) / r.height < 0.08 ? 'pointer' : '';
+      return;
+    }
     const dx = e.clientX - glassDrag.x;
     tuneTo(glassDrag.vfo - dx * (LP.display.WIN / glassDrag.w), true);
   });
   const glassUp = (e) => { if (glassDrag && e.pointerId === glassDrag.id) glassDrag = null; };
   glass.addEventListener('pointerup', glassUp);
   glass.addEventListener('pointercancel', glassUp);
+  glass.addEventListener('lostpointercapture', glassUp);
 
-  /* fine tuning: the wheel, anywhere over the rig */
+  /* fine tuning: the wheel, anywhere over the rig. Scroll distance is
+     ACCUMULATED so a trackpad's stream of tiny deltas turns the dial one
+     0.1 kHz notch per ~40px instead of one notch per event. */
+  let wheelAcc = 0;
   for (const el of [glass, dial]) {
     el.addEventListener('wheel', (e) => {
       e.preventDefault();
       if (LP.dismissCardSoft) LP.dismissCardSoft();
-      const step = e.shiftKey ? 1 : 0.1;
-      tuneTo(LP.rx.vfo + (e.deltaY > 0 ? -step : step));
+      wheelAcc += e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY; /* line-mode wheels count in lines */
+      const notches = Math.trunc(wheelAcc / 40);
+      if (!notches) return;
+      wheelAcc -= notches * 40;
+      tuneTo(LP.rx.vfo - notches * (e.shiftKey ? 1 : 0.1));
     }, { passive: false });
   }
 
@@ -239,10 +239,14 @@
   const cardClose = document.getElementById('card-close');
   let cardAuto = false;
   function showCard(open, stealFocus = true) {
+    const wasOpen = !card.hidden;
     card.hidden = !open;
     cardBtn.setAttribute('aria-expanded', String(open));
     cardAuto = open && !stealFocus;
     if (open && stealFocus) cardClose.focus();
+    /* a deliberate close hands focus back to the chip that opened it; a soft
+       dismissal (hands already on the dial) steals nothing */
+    else if (!open && wasOpen && stealFocus) cardBtn.focus();
   }
   /* the card excuses itself the moment you start operating the set */
   LP.dismissCardSoft = () => { if (cardAuto && !card.hidden) showCard(false, false); };
@@ -250,18 +254,28 @@
   cardClose.addEventListener('click', () => showCard(false));
   LP.showCard = showCard;
 
-  /* ---------- bare keys ---------- */
+  /* ---------- the keys: ONE map, live from any focus ---------- */
+  /* The set is the instrument; the keys work wherever your hands are. Browser
+     and OS chords pass through untouched, and Enter/Space still belong to
+     whatever chip is focused. */
   addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return; /* never hijack a chord */
     if (e.key === 'Escape' && !card.hidden) { showCard(false); return; }
     if (e.key === 'Escape' && !document.getElementById('logbook').hidden) { toggleLog(false); return; }
-    if (e.target instanceof HTMLElement && ['BUTTON', 'INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
-    if (e.target === dial) return; /* the dial has its own map */
-    if (dialDrag || glassDrag) return; /* no band jumps mid-drag */
+    const el = e.target instanceof HTMLElement ? e.target : null;
+    if (el && (['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) || el.isContentEditable)) return;
+    if (el && el.tagName === 'BUTTON' && (e.key === 'Enter' || e.key === ' ')) return;
+    if (dialDrag || glassDrag) return; /* no jumps mid-drag */
+    const B = LP.band.BANDS[LP.rx.band];
     switch (e.key) {
       case 'ArrowLeft': tuneTo(LP.rx.vfo - 0.1); break;
       case 'ArrowRight': tuneTo(LP.rx.vfo + 0.1); break;
       case 'ArrowDown': tuneTo(LP.rx.vfo - 1); break;
       case 'ArrowUp': tuneTo(LP.rx.vfo + 1); break;
+      case 'PageDown': tuneTo(LP.rx.vfo - 5); break;
+      case 'PageUp': tuneTo(LP.rx.vfo + 5); break;
+      case 'Home': tuneTo(B.lo); break;
+      case 'End': tuneTo(B.hi); break;
       case '1': setBand(0); break;
       case '2': setBand(1); break;
       case '3': setBand(2); break;
