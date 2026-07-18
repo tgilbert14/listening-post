@@ -87,20 +87,29 @@ const check = (name, ok, detail = '') => {
       if (st.bitAt(t) === 1 && tMark < 0) tMark = t;
       if (tSpace >= 0 && tMark >= 0) break;
     }
-    const probe = (t) => {
+    // ACCUMULATE many rows so the random noise floor averages out and only
+    // the painted tone survives — the shift is deterministic; the per-row
+    // noise realization (and which bit the day's text lands on) is not.
+    const probe = (want) => {
       const cols = 512, span = 2; // 2 kHz window around the carrier
+      const acc = new Float32Array(cols);
       const out = new Float32Array(cols);
-      LP.band.spectrumRow(out, st.f - span / 2, st.f + span / 2, t, st.band, LP.mulberry(7));
-      // find the two brightest columns
-      let a = 0, b = 0;
-      for (let i = 1; i < cols; i++) { if (out[i] > out[a]) { b = a; a = i; } else if (out[i] > out[b]) b = i; }
-      const hz = (i) => ((i + 0.5) / cols * span - span / 2) * 1000;
-      return { hot: hz(a), cold: hz(b) };
+      let rows = 0;
+      for (let t = 0; t < st._enc.txMs && rows < 80; t += 5.5) {
+        if (st.bitAt(t) !== want) continue;
+        out.fill(0);
+        LP.band.spectrumRow(out, st.f - span / 2, st.f + span / 2, t, st.band, LP.mulberry(rows + 1));
+        for (let i = 0; i < cols; i++) acc[i] += out[i];
+        rows++;
+      }
+      let a = 0;
+      for (let i = 1; i < cols; i++) if (acc[i] > acc[a]) a = i;
+      return ((a + 0.5) / cols * span - span / 2) * 1000;
     };
-    return { mark: probe(tMark), space: probe(tSpace) };
+    return { mark: probe(1), space: probe(0) };
   });
-  const sep = Math.abs(shift170.mark.hot - shift170.space.hot);
-  check('live tone flips between mark and space, 170 Hz apart', sep > 130 && sep < 210, `hot(mark)=${shift170.mark.hot.toFixed(0)}Hz hot(space)=${shift170.space.hot.toFixed(0)}Hz sep=${sep.toFixed(0)}Hz`);
+  const sep = Math.abs(shift170.mark - shift170.space);
+  check('live tone flips between mark and space, 170 Hz apart', sep > 140 && sep < 200, `mark=${shift170.mark.toFixed(0)}Hz space=${shift170.space.toFixed(0)}Hz sep=${sep.toFixed(0)}Hz`);
 
   // ---- 4. Decoder window is character-accurate at frame boundaries ----
   const win = await page.evaluate(() => {

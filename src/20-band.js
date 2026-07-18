@@ -908,11 +908,22 @@ LP.band = (() => {
       return;
     }
     if (st && st.type === 'sstv') {
-      /* the picture is a textured band: scan-line shimmer */
+      /* the picture drives the paint, not a screen-space sine. The video
+         subcarrier band brightens with the luma of the pixel being sent
+         RIGHT NOW (the same LP.sstv.lumaAt the audio FMs on), and the
+         instantaneous FM tone rides as a bright line within the band —
+         so what the waterfall shows is genuinely the picture, one model. */
+      const prog = st.prog ? st.prog(t) : -1;
+      const luma = (prog >= 0 && LP.sstv && LP.sstv.lumaAt) ? LP.sstv.lumaAt(prog) : 0.4;
       const w = Math.max(2, sigma * 2);
-      for (let i = Math.max(0, Math.floor(center - w)); i < Math.min(cols, center + w); i++) {
-        out[i] += amp * (0.35 + 0.65 * Math.abs(Math.sin(i * 1.7 + t / 60)));
+      const lo = Math.max(0, Math.floor(center - w)), hi = Math.min(cols, center + w);
+      for (let i = lo; i < hi; i++) {
+        const edge = 1 - Math.abs((i - center) / w);      /* the band envelope */
+        out[i] += amp * (0.22 + 0.7 * luma) * Math.max(0, edge);
       }
+      /* the live scanning tone: black 1500 Hz at the low edge, white 2300 at
+         the high edge — the sub-carrier the sound is sweeping this instant */
+      splat(out, center + (luma - 0.5) * 2 * w * 0.72, Math.max(0.7, sigma * 0.22), amp * 1.15);
       return;
     }
     if (st && st.type === 'jammer') {

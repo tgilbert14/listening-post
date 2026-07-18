@@ -14,9 +14,13 @@
 > log, haptics, volume knob, non-visual signal-here scanning. The long elegy's first
 > movement (the new tenant's chair) and seasonal traffic (solstice HOMECOMING, the
 > New Year strikes) are live.
-> **Phase 4 ✅ shipped** — CI (build-drift gate + four Playwright suites) and the
+> **Phase 4 ✅ shipped** — CI (build-drift gate + five Playwright suites) and the
 > `?dev` time-warp workshop bar with seeded-night flags.
-> *Deferred: WEFAX, sideband select, station-type registry refactor.*
+> **Re-grade ✅ done** — the panel re-scored the finished app (7.0 as-graded; Content
+> 8.5, DSP & Architecture +1.0) and caught three HIGH regressions, all since fixed.
+> See [`EVALUATION-AFTER.md`](./EVALUATION-AFTER.md).
+> *Deferred: WEFAX, sideband select, station-type registry refactor, model-driven
+> waterfall texture, midnight population re-seed, single-char shortcut remap, phone reflow.*
 
 *The maximal upgrade plan. Built directly on the confirmed findings in
 [`EVALUATION.md`](./EVALUATION.md): every defect becomes a fix, every fix becomes a

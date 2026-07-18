@@ -18,34 +18,30 @@ Merged pull requests (all closed, CI green):
   QSL export, click-to-retune, haptics, volume; and CI.
 - **#4** — Robot 36 SSTV (decodable by a phone SSTV app), the `?dev` warp-clock
   workshop, AGC, the long-elegy first movement, seasonal traffic.
+- **#5** — The re-grade (`docs/EVALUATION-AFTER.md`) and fixes for the three HIGH
+  regressions it found, plus `tests/verify-regress.js`.
 
 Working branch `claude/app-evaluation-grading-8p5na4` is identical to `main`.
-Test suites: `tests/verify-phase{0,1,2,3}.js` — **53 checks**, all green, run by
-`.github/workflows/verify.yml` on every push/PR (also gates on build-drift).
-Run locally: `node build.js` then `CHROME_PATH=<chromium> node tests/verify-phaseN.js`.
+Test suites: `tests/verify-phase{0,1,2,3}.js` + `verify-regress.js` — **60 checks**,
+all green, run by `.github/workflows/verify.yml` on every push/PR (also gates on
+build-drift). Run locally: `node build.js` then `CHROME_PATH=<chromium> node tests/verify-*.js`.
 
-## The one loose end: the re-grade
+## The re-grade (resolved)
 
-A **re-run of the original nine-reviewer adversarial evaluation panel** against the
-finished app was launched to produce a before/after scorecard vs the original
-B / 7.1. Workflow run id: **`wf_d9ac57cb-4ca`** (task `w194165l7`).
+**RESOLVED (PR #5).** The re-run of the original nine-reviewer adversarial panel
+against the finished app (workflow `wf_d9ac57cb-4ca`) completed. Result: **7.0
+weighted as-graded** vs the original 7.1 — Content **7.5 → 8.5**, DSP and
+Architecture **+1.0** each. The panel found three HIGH regressions (two introduced
+during the upgrade: the Robot 36 audio-scheduler crash and the ticker `inFrame`
+latch) plus a set of MEDIUMs; all three HIGHs and four MEDIUMs were fixed and fenced
+by `tests/verify-regress.js`. Full write-up: [`EVALUATION-AFTER.md`](./EVALUATION-AFTER.md).
 
-Last observed progress (8/9 dimensions scored, verification underway); partial
-per-dimension scores seen: **7.5, 7.5, 7.5, 5.5, 7, 7.5, 7.5, 8.5** (one ~5.5
-outlier worth reading — likely a dimension where new surface area (Robot 36 audio
-scheduling, the `?dev` bar, or the growing station list) introduced a real nit).
-
-**To finish the re-grade next session:**
-1. Read `.../subagents/workflows/wf_d9ac57cb-4ca/journal.jsonl` (under the session
-   project dir) — it records each reviewer's score/justification and every
-   verifier verdict.
-2. Apply the same weighting as `docs/EVALUATION.md` (Correctness 20%, A11y 13%,
-   Perf 12%, UX 12%, Runtime 10%, Arch 10%, Content 10%, DSP 8%, Platform 5%).
-3. Deliver the before→after scorecard to the user; fix any confirmed regressions
-   the panel surfaced (the ~5.5 dimension first).
-
-## Deliberately deferred (scoped in `docs/PROPOSAL.md`, not built)
-WEFAX charts; selectable sideband (USB/LSB); the station-type registry refactor.
+## Deliberately deferred (scoped in `docs/PROPOSAL.md` / `EVALUATION-AFTER.md`, not built)
+The station-type registry refactor; factoring the repeated keying-scheduler block;
+making the SSTV/music/jammer waterfall texture model-driven rather than screen-space
+shimmer; the underbrush/DX/sleeper population re-seeding at local midnight for tabs
+left open overnight; single-character shortcut remap/disable (WCAG 2.1.4); the phone
+`.side` reflow; WEFAX charts; selectable sideband (USB/LSB).
 
 ## Notes for whoever resumes
 - Never commit `tests/node_modules` — it's a symlink into the ephemeral scratchpad.
