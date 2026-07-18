@@ -9,15 +9,24 @@ html, body {
   overflow: hidden;
 }
 
-/* the room: a cold spill of light from the display */
+/* the room: a cold spill of phosphor light from the glass above, a warm
+   pool from the dial lamp below, and the dark corners of a room at 3 AM */
 body::before {
   content: '';
   position: fixed; inset: 0;
   background:
-    radial-gradient(110vmax 70vmax at 50% 30%, rgba(111,221,139,.05) 0%, transparent 55%),
-    radial-gradient(80vmax 80vmax at 50% 115%, #020303 0%, transparent 60%);
+    radial-gradient(120vmax 62vmax at 50% 24%, rgba(111,221,139,.07) 0%, transparent 52%),
+    radial-gradient(70vmax 44vmax at 50% 92%, rgba(217,164,65,.045) 0%, transparent 55%),
+    radial-gradient(100vmax 100vmax at 50% 120%, #02050400 0%, #010302 72%),
+    radial-gradient(150vmax 100vmax at 50% 50%, transparent 42%, rgba(0,0,0,.55) 100%);
   pointer-events: none;
+  z-index: 0;
 }
+/* the faintest breathing in the room glow — the set is alive, not a still */
+@media (prefers-reduced-motion: no-preference) {
+  body::before { animation: roomBreath 11s ease-in-out infinite; }
+}
+@keyframes roomBreath { 0%,100% { opacity: .92; } 50% { opacity: 1; } }
 
 .sr-only {
   position: absolute; width: 1px; height: 1px;
@@ -69,18 +78,22 @@ a.skip:focus-visible {
   gap: 14px;
 }
 
-/* the glass: waterfall bezel */
+/* the glass: a CRT tube behind thick glass, set into the chassis. The bezel
+   is a machined ring; the tube face curves; the phosphor is under glass. */
 .glass {
   position: relative;
-  border-radius: 10px;
-  background: #060a08;
-  border: 1px solid #223028;
+  border-radius: 12px;
+  background: #05100b;
+  border: 1px solid #2b3a31;
   box-shadow:
-    0 30px 70px rgba(0,0,0,.7),
-    inset 0 2px 22px rgba(0,0,0,.9),
-    inset 0 0 80px rgba(111,221,139,.04);
+    0 34px 80px rgba(0,0,0,.75),               /* the set sits proud of the desk */
+    0 2px 0 rgba(255,255,255,.03),             /* a lit top lip on the bezel */
+    inset 0 2px 26px rgba(0,0,0,.92),          /* the tube recesses into the frame */
+    inset 0 0 0 3px #0a1510,                   /* the black bezel gasket */
+    inset 0 0 90px rgba(111,221,139,.05);      /* phosphor spill onto the glass */
   overflow: hidden;
   min-height: 0;
+  isolation: isolate;
 }
 #waterfall {
   position: absolute; inset: 0;
@@ -89,15 +102,29 @@ a.skip:focus-visible {
   cursor: crosshair;
   touch-action: none;
 }
-.glass::after { /* glass curvature glare */
+/* under-glass layers: scanlines, tube vignette (corner darkening from the
+   curved face), and a soft diagonal glare on the outer glass */
+.glass::after {
   content: '';
   position: absolute; inset: 0;
-  background: linear-gradient(158deg, rgba(255,255,255,.05) 0%, transparent 26%);
+  z-index: 2;
   pointer-events: none;
+  background:
+    linear-gradient(158deg, rgba(214,240,222,.06) 0%, transparent 22%),
+    radial-gradient(130% 120% at 50% 46%, transparent 58%, rgba(1,4,3,.5) 100%),
+    repeating-linear-gradient(0deg, rgba(0,0,0,.16) 0 1px, transparent 1px 3px);
+  mix-blend-mode: normal;
+}
+@media (prefers-reduced-motion: reduce) {
+  /* the scanlines are decoration, not information — drop them for reduced motion */
+  .glass::after { background:
+    linear-gradient(158deg, rgba(214,240,222,.06) 0%, transparent 22%),
+    radial-gradient(130% 120% at 50% 46%, transparent 58%, rgba(1,4,3,.5) 100%); }
 }
 
-/* ---- the panel ---- */
+/* ---- the panel: a machined faceplate, lit from within ---- */
 .panel {
+  position: relative;
   display: grid;
   grid-template-columns: auto 1fr auto;
   grid-template-areas:
@@ -105,19 +132,39 @@ a.skip:focus-visible {
     "freq bands side";
   gap: 10px 22px;
   align-items: center;
-  background: linear-gradient(180deg, var(--chassis-2), var(--chassis));
-  border: 1px solid #232a26;
-  border-radius: 10px;
+  /* brushed metal: a faint vertical grain over the chassis gradient, warmed
+     by the dial lamp pooling up from the frequency readout in the corner */
+  background:
+    radial-gradient(60% 120% at 16% 120%, rgba(217,164,65,.06) 0%, transparent 60%),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.012) 0 2px, rgba(0,0,0,.012) 2px 4px),
+    linear-gradient(180deg, #1b211e, #0e1210);
+  border: 1px solid #2b332e;
+  border-radius: 12px;
   padding: 16px 22px;
-  box-shadow: 0 18px 50px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.05);
+  box-shadow:
+    0 20px 54px rgba(0,0,0,.62),
+    0 1px 0 rgba(255,255,255,.04),
+    inset 0 1px 0 rgba(255,255,255,.06),
+    inset 0 -18px 40px rgba(0,0,0,.4);
 }
+/* two machine screws sunk into the faceplate corners */
+.panel::before, .panel::after {
+  content: '';
+  position: absolute; top: 12px; width: 7px; height: 7px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #3a433d, #10130f 70%);
+  box-shadow: inset 0 1px 1px rgba(0,0,0,.8), 0 1px 0 rgba(255,255,255,.05);
+  pointer-events: none;
+}
+.panel::before { left: 12px; }
+.panel::after { right: 12px; }
 
 .freq-stack { grid-area: freq; min-width: 7.2ch; }
 .freq {
   font-size: clamp(26px, 4.4vmin, 44px);
   letter-spacing: .06em;
   color: var(--phos);
-  text-shadow: 0 0 14px rgba(111,221,139,.45);
+  /* a lit readout: a tight glow plus a soft halo, like a nixie behind glass */
+  text-shadow: 0 0 2px rgba(201,255,212,.6), 0 0 16px rgba(111,221,139,.5), 0 0 34px rgba(111,221,139,.22);
   font-variant-numeric: tabular-nums;
 }
 /* the nameplate: when you lock a station, the set tells you what it is */
@@ -130,7 +177,7 @@ a.skip:focus-visible {
 }
 .station-id.on { opacity: 1; }
 .freq .khz { font-size: .38em; color: var(--phos-text); letter-spacing: .2em; margin-left: 6px; }
-.freq.locked { color: var(--amber); text-shadow: 0 0 16px rgba(217,164,65,.5); }
+.freq.locked { color: var(--amber); text-shadow: 0 0 2px rgba(255,224,160,.6), 0 0 18px rgba(217,164,65,.55), 0 0 38px rgba(217,164,65,.25); }
 /* the pencil line: a hold-to-log in progress, drawing itself */
 .lockbar {
   height: 2px; width: 0%;
@@ -140,17 +187,22 @@ a.skip:focus-visible {
   transition: width .2s linear;
 }
 
-/* the dial: a brushed tuning strip */
+/* the dial: a milled tuning drum seen edge-on — fluted ticks catching light,
+   curving away into shadow at the top and bottom of the barrel */
 #dial {
   grid-area: dial;
   position: relative;
   height: 46px;
   border-radius: 6px;
   background:
-    repeating-linear-gradient(90deg, #1b201d 0 7px, #232a26 7px 8px),
-    linear-gradient(180deg, #262d29, #141816);
-  border: 1px solid #2c342f;
-  box-shadow: inset 0 3px 8px rgba(0,0,0,.7);
+    repeating-linear-gradient(90deg, rgba(0,0,0,.35) 0 1px, transparent 1px 4px, rgba(255,255,255,.05) 4px 5px, transparent 5px 8px),
+    linear-gradient(180deg, #10130f 0%, #2b332d 22%, #333c35 50%, #232a26 78%, #0e120f 100%);
+  border: 1px solid #333c35;
+  box-shadow:
+    inset 0 6px 10px rgba(0,0,0,.55),
+    inset 0 -6px 10px rgba(0,0,0,.55),
+    inset 0 1px 0 rgba(255,255,255,.06),
+    0 1px 0 rgba(255,255,255,.03);
   cursor: ew-resize;
   touch-action: none;
 }
@@ -166,23 +218,27 @@ a.skip:focus-visible {
 .bands { grid-area: bands; display: flex; gap: 8px; }
 .side { grid-area: side; display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
 
+/* the chips: injection-moulded keys with a lit top edge and a pressed feel */
 button.chip {
   font-family: var(--mono);
   font-size: 10px; letter-spacing: .22em; text-transform: uppercase;
   color: var(--pencil);
-  background: #141917;
-  border: 1px solid #2b332e;
+  background: linear-gradient(180deg, #1a201d, #10140f);
+  border: 1px solid #2f382f;
   border-radius: 6px;
   padding: 9px 14px 8px;
   cursor: pointer;
-  transition: color .15s, border-color .15s, box-shadow .15s;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 1px 2px rgba(0,0,0,.5);
+  transition: color .15s, border-color .15s, box-shadow .15s, transform .06s;
 }
 button.chip:hover { color: var(--phos); border-color: var(--phos-dim); }
+button.chip:active { transform: translateY(1px); box-shadow: inset 0 2px 4px rgba(0,0,0,.6); }
 button.chip[aria-pressed="true"] {
   color: var(--phos); border-color: var(--phos-dim);
-  box-shadow: inset 0 0 12px rgba(111,221,139,.15);
+  background: linear-gradient(180deg, #17241a, #0e150f);
+  box-shadow: inset 0 0 14px rgba(111,221,139,.2), inset 0 1px 0 rgba(201,255,212,.08), 0 0 10px rgba(111,221,139,.1);
 }
-button.chip[aria-pressed="true"]::before { content: '\25CF\2002'; font-size: 7px; vertical-align: 2px; }
+button.chip[aria-pressed="true"]::before { content: '\25CF\2002'; font-size: 7px; vertical-align: 2px; text-shadow: 0 0 6px rgba(111,221,139,.8); }
 button.chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 /* S-meter */

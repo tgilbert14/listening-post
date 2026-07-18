@@ -37,6 +37,9 @@ LP.display = (() => {
   const rng = LP.mulberry(9130);
 
   let lastRow = 0, lastRibbon = 0, ribbonImg = null, dirty = true;
+  /* phosphor bloom is a glow effect, not information: on for motion, off for
+     reduced-motion (and it costs one blurred blit, so it stays cheap) */
+  const bloom = !LP.rm.matches;
 
   /* soft-knee transfer: peaks glow near-white but never flatten, so QSB
      fading stays readable all the way down the raster's history */
@@ -118,6 +121,20 @@ LP.display = (() => {
       cx.imageSmoothingEnabled = false;
       cx.drawImage(wf, 0, 0, COLS, ROWS, 0, wfY, w, wfH);
       cx.imageSmoothingEnabled = true;
+      /* PHOSPHOR BLOOM: a second, blurred, additive pass so bright traces
+         glow and halo the way a real tube does — the single most "CRT" move.
+         One extra blit at the 30 Hz composite rate; skipped for reduced motion
+         and when the filter API is missing. */
+      if (bloom && cx.filter !== undefined) {
+        cx.save();
+        cx.globalCompositeOperation = 'lighter';
+        cx.globalAlpha = 0.5;
+        cx.filter = `blur(${Math.max(1.5, wfH * 0.006)}px)`;
+        cx.imageSmoothingEnabled = true;
+        cx.drawImage(wf, 0, 0, COLS, ROWS, 0, wfY, w, wfH);
+        cx.filter = 'none';
+        cx.restore();
+      }
     }
 
     /* center line: where you are listening (device-pixel true weights) */
