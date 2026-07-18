@@ -494,6 +494,32 @@ LP.band = (() => {
     },
   });
 
+  /* WEFAX: HF radiofax, the weather drawn slowly. 120 lines/minute, FM with
+     black at 1500 Hz and white at 2300 — a synoptic analysis chart whose
+     pressure systems track the day's real space weather (a storm draws a
+     deeper low). A finished chart pins to the log beside the postcards. */
+  S.push({
+    id: 'WEFAX', name: 'WEFAX', f: 9410.0, band: 2, type: 'wefax', bw: 1.9,
+    note: 'the weather, drawn slowly',
+    _m: compileMorse('RYRY DE WX WX ANALYSIS', 16, 3000),
+    PERIOD: 480000, H: 240, START: 5000, LPM: 120,
+    get LINE() { return 60000 / this.LPM; },            /* 500 ms/line */
+    get TX() { return this.START + this.H * this.LINE; },
+    prog(t) {
+      const m = t % this.PERIOD;
+      if (m >= this.TX) return -1;
+      return m < this.START ? 0 : (m - this.START) / (this.H * this.LINE);
+    },
+    lineMs() { return this.LINE; },
+    activity(t) {
+      if (netActive(t)) return morseOn(net.m, t - net.t0) ? 1 : 0;
+      const m = t % this.PERIOD;
+      if (m < this.TX) return 1;
+      if (m > this.TX + 6000 && m < this.TX + 34000) return morseOn(this._m, m - this.TX - 6000) ? 1 : 0;
+      return 0;
+    },
+  });
+
   /* ---------- THE CROSSING: some nights, a bell far away ---------- */
   /* A rare visitor (about one night in four, seeded by the date): a faint
      two-tone crossing bell drifting over 6660. Hearing it at all is the event. */
@@ -624,13 +650,13 @@ LP.band = (() => {
   /* Dozens of minor signals seeded fresh each day — weak CW ragchews,
      drifting carriers, splatter. Not loggable, never named: they exist so
      the named stations are discoveries in a crowd, not exhibits in a hall. */
-  const minors = (() => {
+  function buildMinors() {
     const list = [];
     const rnd = LP.mulberry(daySeed() * 31 + 7);
     const CALLS = 'KNWV';
     const L = () => String.fromCharCode(65 + Math.floor(rnd() * 26));
     const mkCall = () => CALLS[Math.floor(rnd() * 4)] + Math.floor(1 + rnd() * 9) + L() + L() + L();
-    for (let b = 0; b < 3; b++) {
+    for (let b = 0; b < BANDS.length; b++) {
       const B = BANDS[b];
       for (let i = 0; i < 24; i++) {
         let f = B.lo + 6 + rnd() * (B.hi - B.lo - 12);
@@ -662,7 +688,22 @@ LP.band = (() => {
       }
     }
     return list;
-  })();
+  }
+  /* the crowd is seeded fresh each day. A tab left open across local midnight
+     re-rolls it IN PLACE (the exported array reference must stay valid, since
+     the audio holds it), and the sleeper re-picks its carrier for the new
+     night. The named stations already re-seed themselves the same way. */
+  const minors = buildMinors();
+  let minorsDay = daySeed();
+  function reseedDay() {
+    const d = daySeed();
+    if (d === minorsDay) return;
+    minorsDay = d;
+    const fresh = buildMinors();
+    minors.length = 0;
+    for (const nm of fresh) minors.push(nm);
+    sleeper._day = -1; /* force the breathing carrier to be re-chosen */
+  }
   /* on the air in bursts: a seeded duty schedule, no two alike. The slot roll
      is cached — this runs for every minor on every raster row. */
   function minorActive(m, t) {
@@ -687,14 +728,16 @@ LP.band = (() => {
      Now and then it stops. Slightly too long. It is not on the station
      list. It is not loggable. It is not acknowledged, here or anywhere. */
   const sleeper = {
-    m: null, _tried: false,
+    m: null, _day: -1,
     night() { return LP.mulberry(daySeed() + 808)() < 0.13; },
     gain(m, t) {
-      if (!this._tried) {
-        this._tried = true;
+      const d = daySeed();
+      if (d !== this._day) {   /* a new night: re-pick (or clear) the breather */
+        this._day = d;
+        this.m = null;
         if (this.night()) {
           const carriers = minors.filter(x => x.kind === 'carrier');
-          if (carriers.length) this.m = carriers[Math.floor(LP.mulberry(daySeed() + 809)() * carriers.length)];
+          if (carriers.length) this.m = carriers[Math.floor(LP.mulberry(d + 809)() * carriers.length)];
         }
       }
       if (m !== this.m) return 1;
@@ -849,6 +892,7 @@ LP.band = (() => {
   /* one row: intensity 0..1 per column across [fLo..fHi] at time t */
   const sferic = { until: 0, level: 0, lastRoll: 0 };
   function spectrumRow(out, fLo, fHi, t, bandIx, rng) {
+    reseedDay(); /* roll the crowd over at local midnight for tabs left open */
     const cols = out.length;
     /* atmospheric noise falls WITH frequency, as it does on a real HF rig */
     const noiseBase = 0.079 - bandIx * 0.012;
@@ -926,22 +970,47 @@ LP.band = (() => {
       splat(out, center + (luma - 0.5) * 2 * w * 0.72, Math.max(0.7, sigma * 0.22), amp * 1.15);
       return;
     }
-    if (st && st.type === 'jammer') {
-      /* a wall of hash: wideband, textured, unmusical */
+    if (st && st.type === 'wefax') {
+      /* the fax is one FM tone: a faint band with a bright line riding where
+         the ink is this instant (2300 white at the high edge → 1500 ink low),
+         from the same table the audio sends */
+      const prog = st.prog ? st.prog(t) : -1;
+      const inkv = (prog >= 0 && LP.wefax && LP.wefax.lineAt) ? LP.wefax.lineAt(prog) : 0.1;
       const w = Math.max(2, sigma * 2);
-      for (let i = Math.max(0, Math.floor(center - w)); i < Math.min(cols, center + w); i++) {
-        out[i] += amp * (0.5 + 0.5 * Math.abs(Math.sin(i * 12.9898 + t / 35)));
-      }
+      const lo = Math.max(0, Math.floor(center - w)), hi = Math.min(cols, center + w);
+      for (let i = lo; i < hi; i++) out[i] += amp * 0.28 * Math.max(0, 1 - Math.abs((i - center) / w));
+      splat(out, center + (0.5 - inkv) * 2 * w * 0.72, Math.max(0.7, sigma * 0.22), amp * 1.1);
+      return;
+    }
+    if (st && st.type === 'jammer') {
+      /* a wall of hash: genuinely content-free, so the texture is honest
+         noise — but seeded per-slot from the MODEL (not the screen), so two
+         listeners see the same wall and it pulses with the jammer's own
+         swing rather than with the paint rate */
+      const w = Math.max(2, sigma * 2);
+      const slot = Math.floor(t / 90);
+      const jr = LP.mulberry((slot * 2654435761) | 0);
+      const lo = Math.max(0, Math.floor(center - w)), hi = Math.min(cols, center + w);
+      for (let i = lo; i < hi; i++) out[i] += amp * (0.35 + 0.65 * jr());
       return;
     }
     if (st && st.type === 'music') {
+      /* AURORA's spectrum shows the NOTE it is playing this instant: the same
+         wall-clock step and seeded scale the audio schedules, so the bright
+         line in the band is the tone you hear, not a screen-space ripple */
       const w = Math.max(2, sigma * 2);
-      for (let i = Math.max(0, Math.floor(center - w)); i < Math.min(cols, center + w); i++) {
+      const step = Math.floor(t / 320);
+      const nr = LP.mulberry((20260716 + LP.date(t).getDate() * 977 + step) | 0);
+      const scale = [0, 3, 5, 7, 10, 12, 15];
+      const deg = scale[Math.floor(nr() * scale.length)];
+      const lo = Math.max(0, Math.floor(center - w)), hi = Math.min(cols, center + w);
+      for (let i = lo; i < hi; i++) {
         const x = (i - center) / w;
-        out[i] += amp * Math.max(0, 1 - x * x) * (0.35 + 0.4 * Math.abs(Math.sin(i * 0.9 + t / 140)));
+        out[i] += amp * Math.max(0, 1 - x * x) * 0.5;   /* the warm lowpassed band */
       }
-      /* carrier spike in the middle */
-      splat(out, center, 1, amp * 1.2);
+      splat(out, center, 1, amp * 1.2);                  /* the carrier */
+      /* the lead voice, placed by its scale degree within the audio band */
+      splat(out, center + (deg / 15 - 0.5) * 1.4 * w, Math.max(0.7, sigma * 0.3), amp * 0.9);
       return;
     }
     splat(out, center, sigma, amp);
@@ -990,6 +1059,6 @@ LP.band = (() => {
 /* the receiver state: one VFO, one band, one span (the width of the window
    the waterfall resolves). Arrival parks it a nudge below AURORA so the first
    drag of the dial tunes INTO the music. */
-LP.rx = { band: 1, vfo: 6779.0, span: 48, dwellT0: performance.now() };
+LP.rx = { band: 1, vfo: 6779.0, span: 48, sb: 'USB', dwellT0: performance.now() };
 LP.SPANS = [48, 24, 12];   /* wide to narrow: zoom in and the keying resolves */
 

@@ -7,7 +7,9 @@ An interactive showcase by [Desert Data Labs](https://desertdatalabs.com): a sho
 rendered entirely in procedural canvas and WebAudio — no frameworks, no images, no audio files.
 One model is the single source of truth: the waterfall paints it and the audio engine sounds it,
 so what you see is exactly what you hear. CW beats against the BFO, which means the pitch of a
-beacon **is** your tuning error. Signals fade on slow ionospheric cycles that carry real space
+beacon **is** your tuning error — and it has a **side**: on USB a signal above the dial beats
+high and below beats low; switch to LSB and every pitch on the band turns over. Signals fade on
+slow ionospheric cycles that carry real space
 weather — a daily geomagnetic index, dayside flares, sporadic-E openings. Lightning crashes are
 broadband on the glass and in your ears at the same moment. The set rides its own **AGC**, so a
 strong carrier pulls the floor down and the band swells back when it lets go.
@@ -28,6 +30,10 @@ empty hall. The traffic runs on the wall clock whether anyone is listening or no
   lines of sync, luma, and chroma, every six minutes. Point a phone running an SSTV decoder at
   the speaker and see what develops. Tune it badly and the picture pays for it. Sit with one to
   the end and the finished card is **pinned into your log** as a keepsake
+- **WEFAX** — HF radiofax at 120 lines/minute: a procedurally-drawn synoptic weather chart —
+  coastline, isobars, pressure centres, fronts — whose systems track the day's real space
+  weather (a storm draws a deeper low). Sit with one to the end and the finished chart pins to
+  your log beside the postcards
 - **HOMECOMING** — eleven tones, only transmitted after dark, your local dark
 - **THE CROSSING** — some nights, a bell far away over 6660. About one night in four, seeded by
   the date. Hearing it at all is the event
@@ -69,6 +75,7 @@ is remembered.
 | Tune | drag the glass or the dial strip; wheel for fine work; fling the dial to coast | arrows (±0.1 / ±1), PgUp/PgDn (±5), Home/End |
 | Jump across the band | tap the ribbon at the top of the glass | — |
 | Zoom the window | 48/24/12 kHz chip | `Z` |
+| Sideband (flips the CW pitch sense) | USB/LSB chip | `S` |
 | Change band | GROUND / SKY / HIGH chips | `1` `2` `3` |
 | Station log (retune / export from it) | LOG chip | `L` |
 | Sound on/off · volume | SOUND chip · volume slider | — |
@@ -90,7 +97,7 @@ node tests/verify-regress.js  # the live paths static checks miss (SSTV schedule
 ```
 
 Fragments concatenate in order: tokens → shell → body → boot → band → audio → waterfall →
-sstv → interact → log → arrival. The build fails loudly if any `__PLACEHOLDER__` survives.
+sstv → wefax → interact → log → arrival. The build fails loudly if any `__PLACEHOLDER__` survives.
 CI (`.github/workflows/verify.yml`) rebuilds, fails on any drift from the committed `index.html`,
 and gates on all five suites. See [`tests/README.md`](tests/README.md).
 

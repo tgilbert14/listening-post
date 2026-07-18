@@ -483,22 +483,32 @@ body.arriving .masthead, body.arriving .panel { opacity: 0; }
   }
 }
 
-/* phones: stack the panel */
+/* phones: the controls flow into a compact row UNDER the dial so the glass
+   keeps its height instead of being letterboxed by a tall chip column */
 @media (max-width: 680px) {
   .rig { padding: 66px 3vw 12px; gap: 10px; }
   .masthead { top: 12px; left: 16px; }
   .masthead .sub { display: none; }
   .panel {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: auto 1fr;
     grid-template-areas:
       "dial dial"
-      "freq side"
-      "bands side";
+      "freq bands"
+      "side side";
     padding: 12px 14px;
     gap: 10px 12px;
   }
   .freq { font-size: 27px; }
-  #smeter { width: 104px; height: 38px; }
+  .side {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .side .chip { flex: 0 0 auto; }
+  #smeter { width: 96px; height: 38px; margin: 0; order: -1; }
+  input.vol { width: 120px; }
   .develop { top: auto; bottom: 150px; }
   .logbook { top: 66px; }
 }

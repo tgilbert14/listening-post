@@ -61,6 +61,25 @@ const check = (name, ok, detail = '') => {
   check('the minute mark is long-pip or (rare) dropped', pips.long === 1 || pips.fail, `long=${pips.long}`);
   check('the carrier idles between pips', pips.quiet < 0.1, `quiet=${pips.quiet}`);
 
+  // ---- 2b. WEFAX: real fax timing, develops, pins to the log ----
+  const wefax = await page.evaluate(async () => {
+    const st = LP.band.stations.find((s) => s.type === 'wefax');
+    if (!st) return { missing: true };
+    const timing = { LPM: st.LPM, line: st.LINE, tx: st.TX, prog0: st.prog(st.PERIOD * 5 + st.START + st.LINE * st.H * 0.5) };
+    // tune it in mid-transmission and let the develop panel run
+    LP.engaged = true;
+    LP.warp = (Math.floor(Date.now() / st.PERIOD) * st.PERIOD + st.START + st.LINE * st.H * 0.5) - Date.now();
+    LP.setBand(2); LP.tuneTo(9410, true);
+    await new Promise((r) => setTimeout(r, 1500));
+    const panel = document.getElementById('wefax-develop');
+    const ink = LP.wefax.lineAt(0.5);
+    LP.warp = 0;
+    return { timing, panelOpen: panel && !panel.hidden, id: document.getElementById('wefax-id').textContent, ink };
+  });
+  check('WEFAX runs at 120 lines/min (500 ms/line)', !wefax.missing && wefax.timing.LPM === 120 && Math.abs(wefax.timing.line - 500) < 0.1, JSON.stringify(wefax.timing));
+  check('WEFAX develops into its panel when tuned', wefax.panelOpen && /WEFAX/.test(wefax.id || ''), JSON.stringify({ open: wefax.panelOpen, id: wefax.id }));
+  check('WEFAX ink table (audio+visual share one model)', typeof wefax.ink === 'number' && wefax.ink >= 0 && wefax.ink <= 1, `ink=${wefax.ink}`);
+
   // ---- 3. THE JAMMER and the displaced numbers ----
   const jam = await page.evaluate(() => {
     const lat = LP.band.stations.find((s) => s.type === 'buzzer');

@@ -16,6 +16,7 @@ const parts = [
   '30-audio.js',
   '40-waterfall.js',
   '50-sstv.js',
+  '55-wefax.js',
   '60-interact.js',
   '70-log.js',
   '80-arrival.js',

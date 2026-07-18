@@ -31,6 +31,7 @@
     <div class="side">
       <canvas id="smeter" aria-hidden="true"></canvas>
       <button class="chip" id="zoom-toggle" disabled aria-label="Span: 48 kilohertz. Zoom the window.">48 kHz</button>
+      <button class="chip" id="sb-toggle" disabled aria-label="Sideband: upper. Press to switch.">USB</button>
       <button class="chip" id="log-toggle" disabled aria-expanded="false" aria-controls="logbook">Log</button>
       <button class="chip" id="card-toggle" disabled aria-expanded="false" aria-controls="opcard">Card</button>
       <button class="chip" id="sound-toggle" disabled aria-pressed="false">Sound</button>
@@ -57,6 +58,11 @@
   <aside class="develop" id="develop" aria-label="Picture decoder" hidden>
     <canvas id="sstv" width="320" height="240" role="img" aria-label="No picture received yet."></canvas>
     <p class="strip"><span id="sstv-id">—</span><span id="sstv-pct"></span></p>
+  </aside>
+
+  <aside class="develop" id="wefax-develop" aria-label="Weather chart decoder" hidden>
+    <canvas id="wefax" width="320" height="240" role="img" aria-label="No chart received yet."></canvas>
+    <p class="strip"><span id="wefax-id">—</span><span id="wefax-pct"></span></p>
   </aside>
 
   <aside class="logbook" id="logbook" aria-label="Station log" hidden>
