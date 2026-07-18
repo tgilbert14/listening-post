@@ -8,7 +8,7 @@
   const logBtn = document.getElementById('log-toggle');
   const zoomBtn = document.getElementById('zoom-toggle');
 
-  const anyGesture = () => { LP.audio.arm(); LP.ticker.kick(); };
+  const anyGesture = () => { LP.engaged = true; LP.audio.arm(); LP.ticker.kick(); };
   addEventListener('pointerdown', anyGesture, { capture: true });
   addEventListener('pointerup', anyGesture, { capture: true });
   addEventListener('keydown', anyGesture, { capture: true });
@@ -220,6 +220,9 @@
       LP.log.render();
       LP.say(`Station log open — ${LP.log.entries.length} ${LP.log.entries.length === 1 ? 'entry' : 'entries'}.`);
     } else {
+      /* if focus was inside the book, hand it back to the chip that owns it —
+         never drop keyboard focus to <body> (WCAG 2.4.3) */
+      if (book.contains(document.activeElement)) logBtn.focus();
       book.classList.remove('open');
       setTimeout(() => { if (!book.classList.contains('open')) book.hidden = true; }, 520);
       LP.say('Station log closed.');

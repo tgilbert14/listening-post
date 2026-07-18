@@ -808,6 +808,10 @@ LP.band = (() => {
     _m: humanize(compileMorse('QRZ? QRZ?', 12, 400), LP.mulberry(4257), 100),
     tune(vfo, dwellMs, nearStation, dt = 16.7) {
       if (this.state === 'gone' || document.hidden) return;
+      /* it only notices a listener who is actually THERE: a page left open on
+         a desk, never touched, must not summon and spend the once-ever event.
+         Once it has begun approaching a present listener, it sees it through. */
+      if (this.state === 'asleep' && !LP.engaged) return;
       const t = performance.now();
       if (this.state === 'asleep') {
         if (dwellMs > 20000 && !nearStation) {
