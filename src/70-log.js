@@ -68,6 +68,7 @@ LP.log = (() => {
     LP.say(`Logged: ${id}${f ? ', ' + f.toFixed(1) + ' kilohertz' : ''}${report ? ', report ' + report.split('').join(' ') : ''}.`);
     render();
     maybeNet();
+    dispatchEvent(new CustomEvent('lp:logged', { detail: { entry: e } }));
   }
 
   /* pin a finished picture to its line — the last postcard OR weather chart

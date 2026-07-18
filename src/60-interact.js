@@ -64,11 +64,13 @@
   function tuneTo(f, coarse, fromCoast) {
     if (!fromCoast && typeof stopCoast === 'function') stopCoast(); /* any deliberate tune catches the flywheel */
     const B = LP.band.BANDS[LP.rx.band];
+    const previousVfo = LP.rx.vfo;
     if (Math.abs(f - dwellRec.f) > 0.5) {       /* leaving a spot: bank the stay */
       noteDwell();
       dwellRec = { f, t0: performance.now() };
     }
     LP.rx.vfo = LP.clamp(Math.round(f * 10) / 10, B.lo, B.hi);
+    if (LP.mission && LP.mission.noteTune) LP.mission.noteTune(previousVfo, LP.rx.vfo, !!coarse);
     LP.rx.dwellT0 = performance.now();
     reflectDial();
     if (LP.display && LP.display.invalidateRow) LP.display.invalidateRow();

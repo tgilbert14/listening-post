@@ -8,7 +8,7 @@
    claims ON until the context runs; opt-out is remembered; hidden tabs
    are silent. */
 LP.audio = (() => {
-  let ctx = null, master = null, agc = null, noiseGain = null, crashGain = null, duet = null;
+  let ctx = null, master = null, missionFilter = null, agc = null, noiseGain = null, crashGain = null, duet = null;
   let enabled = LP.store.get('sound', true);
   const chip = document.getElementById('sound-toggle');
   const voices = new Map();   /* station id -> voice */
@@ -27,7 +27,9 @@ LP.audio = (() => {
     /* AGC: the receiver rides its own gain — a strong carrier pulls the
        floor down fast, and the band swells back slowly when it lets go */
     agc = ctx.createGain(); agc.gain.value = 1;
-    master.connect(agc).connect(comp).connect(ctx.destination);
+    missionFilter = ctx.createBiquadFilter();
+    missionFilter.type = 'lowpass'; missionFilter.frequency.value = 18000; missionFilter.Q.value = 0.4;
+    master.connect(missionFilter).connect(agc).connect(comp).connect(ctx.destination);
 
     /* the noise floor: band hiss, shaped */
     const len = ctx.sampleRate * 2;
@@ -750,6 +752,29 @@ LP.audio = (() => {
     o.onended = () => { try { o.disconnect(); g.disconnect(); } catch { } };
   }
 
+  /* Mission feedback uses the receiver's already gesture-gated signal path:
+     no audio file downloads, no second volume control, and BOX really does
+     turn the entire band into a cardboard-filtered murmur. */
+  function setMissionMuffle(on) {
+    if (!ctx || !missionFilter) return;
+    missionFilter.frequency.cancelScheduledValues(ctx.currentTime);
+    missionFilter.frequency.setTargetAtTime(on ? 430 : 18000, ctx.currentTime, on ? 0.08 : 0.22);
+  }
+  function cue(kind) {
+    arm();
+    if (!audible()) return;
+    const now = ctx.currentTime + 0.01;
+    const patterns = {
+      objective: [[660, 0, .06], [880, .08, .08]],
+      choice: [[330, 0, .05], [494, .06, .07]],
+      anomaly: [[190, 0, .16], [760, .04, .05], [118, .19, .18]],
+      alert: [[880, 0, .12], [620, .14, .12], [880, .28, .16]],
+      complete: [[330, 0, .09], [440, .1, .09], [660, .2, .11], [880, .32, .22]],
+    };
+    const seq = patterns[kind] || patterns.objective;
+    for (const [freq, offset, dur] of seq) note(master, freq, now + offset, dur, kind === 'anomaly' ? 'sawtooth' : 'square', kind === 'alert' ? .07 : .045);
+  }
+
   function note(bus, freq, when, dur, type, amp) {
     const o = ctx.createOscillator();
     o.type = type; o.frequency.value = freq;
@@ -763,5 +788,5 @@ LP.audio = (() => {
   }
 
   LP.relayClunk = relayClunk;
-  return { arm, toggle, update, reflect, relayClunk, get smeter() { return smeter; }, get enabled() { return enabled; } };
+  return { arm, toggle, update, reflect, relayClunk, setMissionMuffle, cue, get smeter() { return smeter; }, get enabled() { return enabled; } };
 })();

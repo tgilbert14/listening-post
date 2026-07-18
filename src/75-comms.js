@@ -7,6 +7,10 @@
   const msg = document.getElementById('codec-message');
   const speaker = document.getElementById('codec-title');
   const status = document.getElementById('codec-status');
+  const frequency = document.getElementById('codec-frequency');
+  const choices = document.getElementById('codec-choices');
+  const portraits = panel ? panel.querySelectorAll('.codec-portrait') : [];
+  const contactButtons = panel ? panel.querySelectorAll('[data-codec-contact]') : [];
   if (!panel || !toggle || !close) return;
 
   const calls = {
@@ -41,20 +45,41 @@
       osc.connect(gain).connect(ac.destination); osc.start(); osc.stop(ac.currentTime + .16); osc.onended = () => ac.close();
     } catch { /* visual alert still works */ }
   }
-  function show(data = intro, state = 'CONNECTED') {
+  function show(data = intro, state = 'CONNECTED', options = {}) {
     previousFocus = document.activeElement;
     speaker.textContent = data[0]; msg.textContent = data[1]; status.textContent = state;
+    if (frequency) frequency.textContent = options.frequency || (data[0] === 'RAVEN' ? '141.12' : data[0] === '???' ? '---.--' : '140.85');
+    panel.classList.toggle('corrupted-call', !!options.corrupt);
+    portraits.forEach(p => p.classList.toggle('speaking', p.querySelector('span')?.textContent === data[0]));
+    if (choices) {
+      choices.textContent = '';
+      for (const choice of options.choices || []) {
+        const button = document.createElement('button');
+        const item = typeof choice === 'string' ? { label: choice, value: choice } : choice;
+        button.type = 'button'; button.textContent = item.label; button.dataset.value = item.value || item.label;
+        button.addEventListener('click', () => {
+          const value = button.dataset.value;
+          LP.audio?.cue?.('choice');
+          if (item.close !== false) hide();
+          if (options.onChoice) options.onChoice(value, item);
+          dispatchEvent(new CustomEvent('lp:codec-choice', { detail: { value, speaker: data[0], state } }));
+        });
+        choices.appendChild(button);
+      }
+    }
     panel.hidden = false; toggle.setAttribute('aria-expanded', 'true');
-    chirp(); requestAnimationFrame(() => close.focus());
+    chirp(); requestAnimationFrame(() => (choices && choices.firstElementChild ? choices.firstElementChild : close).focus());
     LP.say(`Secure call from ${data[0]}. ${data[1]}`);
   }
   function hide() {
     if (panel.hidden) return;
     panel.hidden = true; toggle.setAttribute('aria-expanded', 'false');
+    panel.classList.remove('corrupted-call');
     if (previousFocus && previousFocus.focus) previousFocus.focus(); else toggle.focus();
   }
   toggle.addEventListener('click', () => {
     if (!panel.hidden) return hide();
+    if (LP.mission && LP.mission.active) { LP.mission.openComms(); return; }
     const data = manualCalls ? nuisance[Math.min(manualCalls - 1, nuisance.length - 1)] : intro;
     manualCalls++;
     show(data, manualCalls > 1 ? 'UNSOLICITED ADVICE' : 'CONNECTED');
@@ -62,6 +87,14 @@
   close.addEventListener('click', hide);
   panel.addEventListener('click', e => { if (e.target === panel) hide(); });
   addEventListener('keydown', e => { if (e.key === 'Escape' && !panel.hidden) { e.preventDefault(); hide(); } });
+
+  contactButtons.forEach(button => button.addEventListener('click', () => {
+    const contact = button.dataset.codecContact;
+    if (LP.mission && LP.mission.active) LP.mission.contact(contact);
+    else if (contact === 'VESPER') show(intro, 'MEMORY 01');
+    else if (contact === 'RAVEN') show(['RAVEN', 'This is Raven. I am in a radio cabinet. The cabinet has excellent operational acoustics.'], 'MEMORY 02', { frequency: '141.12' });
+    else show(['???', 'NO CARRIER. THE EMPTY MEMORY IS STILL LISTENING.'], 'MEMORY 03', { frequency: '---.--', corrupt: true });
+  }));
 
   LP.ticker.add(() => {
     if (!LP.log) return;
@@ -74,5 +107,5 @@
       }
     }
   });
-  LP.comms = { show, hide, calls };
+  LP.comms = { show, hide, calls, get open() { return !panel.hidden; } };
 })();

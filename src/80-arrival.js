@@ -12,12 +12,10 @@
 
     if (!LP.rm.matches) setTimeout(() => document.body.classList.remove('arriving'), 900);
 
-    /* first visit only: the operator's card is clipped to the rig — for EVERY
-       first visitor, moving or still — and (motion permitting) the set glides
+    /* first visit: the title screen now carries onboarding; the set still glides
        the last nudge into the music, so the dial teaches itself */
     if (!LP.store.get('visited', false)) {
       LP.store.set('visited', true);
-      setTimeout(() => { if (LP.showCard) LP.showCard(true, false); }, 1200);
       if (!LP.rm.matches) {
         const from = LP.rx.vfo - 9, to = LP.rx.vfo;
         const t0 = performance.now();
