@@ -40,18 +40,18 @@ const page = `<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The Listening Post · a Desert Data Labs experience</title>
-<meta name="description" content="A shortwave receiver at 3 AM. Three bands, a waterfall, and voices in the static — beacons, a numbers station, a picture riding the noise, and something that listens back.">
-<meta property="og:title" content="The Listening Post · Desert Data Labs">
-<meta property="og:description" content="The band is open. Tune the dial: morse in the dark, a picture riding the noise, and something that listens back.">
+<meta name="description" content="NIGHT GLASS: a tactical frequency operation in the static. Tune the receiver, answer the codec, evade the trace, and do not trust the pigeon.">
+<meta property="og:title" content="NIGHT GLASS · The Listening Post">
+<meta property="og:description" content="The band is open. Tune the receiver, answer the codec, evade the trace, and do not trust the pigeon.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://tgilbert14.github.io/listening-post/">
 <meta property="og:image" content="https://tgilbert14.github.io/listening-post/og-card.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="A phosphor-green spectrum waterfall at zero-beat on AURORA, lightning crashes across the band.">
+<meta property="og:image:alt" content="NIGHT GLASS tactical frequency action cover with a pixelated radio operator and an incoming codec call on 140.85.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="https://tgilbert14.github.io/listening-post/og-card.jpg">
-<meta name="twitter:image:alt" content="A phosphor-green spectrum waterfall at zero-beat on AURORA, lightning crashes across the band.">
+<meta name="twitter:image:alt" content="NIGHT GLASS tactical frequency action cover with a pixelated radio operator and an incoming codec call on 140.85.">
 <meta name="theme-color" content="#050807">
 <link rel="canonical" href="https://tgilbert14.github.io/listening-post/">
 <link rel="manifest" href="manifest.webmanifest">
