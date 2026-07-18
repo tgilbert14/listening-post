@@ -6,13 +6,14 @@ const check = (name, ok, detail = '') => {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  — ' + String(detail).slice(0, 160) : ''}`);
   if (!ok) fails++;
 };
-const enterMission = async (page) => {
-  if (!await page.$('#title-screen:not([hidden])')) return;
-  await page.click('#mission-start');
-  await page.waitForTimeout(1100);
-  const response = await page.$('#codec-choices button');
-  if (response) await response.click();
-  await page.waitForTimeout(150);
+const openReceiverForTest = async (page) => {
+  await page.evaluate(() => {
+    const cover = document.getElementById('title-screen');
+    if (cover) cover.hidden = true;
+    const codec = document.getElementById('codec');
+    if (codec) { codec.hidden = true; codec.style.pointerEvents = 'none'; }
+    document.body.classList.add('mission-started');
+  });
 };
 
 (async () => {
@@ -143,7 +144,9 @@ const enterMission = async (page) => {
   });
   await page.reload();
   await page.waitForTimeout(2500);
-  await enterMission(page);
+  // This assertion targets the log component, not campaign timing. Keep the
+  // receiver deterministic so a legitimate codec call cannot steal the click.
+  await openReceiverForTest(page);
   await page.keyboard.press('l');
   await page.waitForTimeout(600);
   const beforeJump = await page.evaluate(() => ({ band: LP.rx.band, vfo: LP.rx.vfo }));
