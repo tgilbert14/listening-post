@@ -761,12 +761,17 @@ LP.audio = (() => {
     missionFilter.frequency.setTargetAtTime(on ? 430 : 18000, ctx.currentTime, on ? 0.08 : 0.22);
   }
   function cue(kind) {
+    /* A carrier can be acquired before the visitor touches the set. Visual
+       codec feedback may still appear, but audio must never create/resume a
+       context until a real activation-bearing gesture has engaged the rig. */
+    if (!LP.engaged) return;
     arm();
     if (!audible()) return;
     const now = ctx.currentTime + 0.01;
     const patterns = {
       objective: [[660, 0, .06], [880, .08, .08]],
       choice: [[330, 0, .05], [494, .06, .07]],
+      codec: [[880, 0, .06], [440, .07, .09]],
       anomaly: [[190, 0, .16], [760, .04, .05], [118, .19, .18]],
       alert: [[880, 0, .12], [620, .14, .12], [880, .28, .16]],
       complete: [[330, 0, .09], [440, .1, .09], [660, .2, .11], [880, .32, .22]],

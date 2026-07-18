@@ -27,7 +27,6 @@ const openReceiverForTest = async (page) => {
   page.on('pageerror', (e) => logs.push(`[PAGEERROR] ${e.message}`));
   await page.goto(URL);
   await page.waitForTimeout(3000);
-  await page.click('#title-screen');
 
   // ---- 1. The cipher: decode the day's groups back to the sentence ----
   const cipher = await page.evaluate(() => {

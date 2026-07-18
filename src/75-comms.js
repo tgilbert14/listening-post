@@ -37,13 +37,9 @@
   const heard = new Set();
 
   function chirp() {
-    try {
-      const C = window.AudioContext || window.webkitAudioContext;
-      const ac = new C(), gain = ac.createGain(), osc = ac.createOscillator();
-      osc.type = 'square'; osc.frequency.setValueAtTime(880, ac.currentTime); osc.frequency.exponentialRampToValueAtTime(440, ac.currentTime + .11);
-      gain.gain.setValueAtTime(.0001, ac.currentTime); gain.gain.exponentialRampToValueAtTime(.055, ac.currentTime + .01); gain.gain.exponentialRampToValueAtTime(.0001, ac.currentTime + .15);
-      osc.connect(gain).connect(ac.destination); osc.start(); osc.stop(ac.currentTime + .16); osc.onended = () => ac.close();
-    } catch { /* visual alert still works */ }
+    /* Reuse the receiver bus. A fresh AudioContext here would violate Chrome's
+       autoplay policy when a delayed signal-acquired call arrives. */
+    LP.audio?.cue?.('codec');
   }
   function show(data = intro, state = 'CONNECTED', options = {}) {
     previousFocus = document.activeElement;
