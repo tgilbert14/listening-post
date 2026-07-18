@@ -7,6 +7,9 @@ const check = (name, ok, detail = '') => {
   if (!ok) fails++;
 };
 const openReceiverForTest = async (page) => {
+  // Exercise the same gesture gate a visitor satisfies before receiver audio
+  // can start, without launching the asynchronous campaign in this unit test.
+  await page.click('#title-screen');
   await page.evaluate(() => {
     const cover = document.getElementById('title-screen');
     if (cover) cover.hidden = true;
