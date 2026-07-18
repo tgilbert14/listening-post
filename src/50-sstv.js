@@ -19,6 +19,7 @@ LP.sstv = (() => {
   const CAPTIONS = ['THE DUNES, AFTER MIDNIGHT', 'SHE IS STILL UP THERE', 'WE ARE STILL LISTENING', 'NO ONE AT THE KEY'];
   let luma = null, genIx = -1, painted = 0, lastSeen = 0, announced = false;
   let curCaption = CAPTIONS[0];
+  let clockDrift = 0; /* px/line — this receiver's sample clock vs the sender's */
 
   /* ---------- the postcards ---------- */
   function generate(seed) {
@@ -189,6 +190,8 @@ LP.sstv = (() => {
       generate(ix);
       painted = 0;
       announced = false;
+      /* each transmission meets this receiver's clock slightly differently */
+      clockDrift = (LP.mulberry((ix * 3 + 1) | 0)() - 0.5) * 0.06;
       cx.fillStyle = '#060a08';
       cx.fillRect(0, 0, W, H);
     }
@@ -208,9 +211,18 @@ LP.sstv = (() => {
       let budget = 32; /* thirty-two lines at a time, as the card advertises */
       while (painted < target && budget-- > 0) {
         const y = painted;
-        /* a badly tuned line comes in skewed and snowy */
-        const skew = Math.round(off * 6 + (1 - quality) * (Math.random() * 8 - 4));
+        /* honest SSTV physics: a mistuned FREQUENCY reads every pixel too
+           bright or too dark; a mismatched sample CLOCK slants the picture,
+           accumulating line by line. Skew no longer pretends to be pitch. */
+        const skew = Math.round(clockDrift * y);
         cx.drawImage(src, 0, y, W, 1, skew, y, W, 1);
+        const bias = LP.clamp(off * 0.18, -0.5, 0.5);
+        if (Math.abs(bias) > 0.02) {
+          cx.globalAlpha = Math.abs(bias);
+          cx.fillStyle = bias > 0 ? '#cfd8cf' : '#04070a';
+          cx.fillRect(skew, y, W, 1);
+          cx.globalAlpha = 1;
+        }
         if (quality < 0.75) {
           cx.globalAlpha = (0.75 - quality) * 0.9;
           cx.fillStyle = '#0a0f0c';
