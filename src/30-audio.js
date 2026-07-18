@@ -22,7 +22,8 @@ LP.audio = (() => {
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -20; comp.knee.value = 22; comp.ratio.value = 5;
     master = ctx.createGain();
-    master.gain.value = LP.clamp(Number(LP.store.get('vol', 85)) || 85, 0, 100) / 100;
+    const _v0 = Number(LP.store.get('vol', 85)); /* a stored 0 is a real mute, not missing */
+    master.gain.value = LP.clamp(Number.isFinite(_v0) ? _v0 : 85, 0, 100) / 100;
     /* AGC: the receiver rides its own gain — a strong carrier pulls the
        floor down fast, and the band swells back slowly when it lets go */
     agc = ctx.createGain(); agc.gain.value = 1;
@@ -97,7 +98,8 @@ LP.audio = (() => {
   /* the volume knob: the one receiver control the set was missing */
   const vol = document.getElementById('vol');
   if (vol) {
-    vol.value = LP.clamp(Number(LP.store.get('vol', 85)) || 85, 0, 100);
+    const _v1 = Number(LP.store.get('vol', 85));
+    vol.value = LP.clamp(Number.isFinite(_v1) ? _v1 : 85, 0, 100);
     vol.addEventListener('input', () => {
       LP.store.set('vol', +vol.value);
       if (master) master.gain.setTargetAtTime(+vol.value / 100, ctx.currentTime, 0.03);
@@ -365,26 +367,35 @@ LP.audio = (() => {
         const m = t % st.PERIOD;
         if (m < st.TX && LP.sstv) {
           v.g.gain.setTargetAtTime(vol * 0.15, now, K);
-          /* REAL Robot 36: VIS header, then per-line sync/porch/Y/chroma —
-             appended to the audio timeline ahead of the playhead, never
-             cancelled mid-frame. Point an SSTV app at the speaker. */
+          /* REAL Robot 36: VIS header, then per-line sync/porch/Y/chroma.
+             CRITICAL: every event is placed on ONE audio-clock timeline
+             anchored once per cycle (v._audioBase). Recomputing line times
+             from the drifting wall clock every frame let adjacent chroma
+             curves overlap, which throws NotSupportedError — so the anchor
+             is captured once and never recomputed mid-frame. */
           const cyc = Math.floor(t / st.PERIOD);
           const fo = v.o.frequency;
-          if (v._cycle !== cyc) { v._cycle = cyc; fo.cancelScheduledValues(now); v._sched = m; }
-          if (v._sched < m + 5) v._sched = m + 5; /* never schedule behind the playhead */
+          if (v._cycle !== cyc) {
+            v._cycle = cyc;
+            fo.cancelScheduledValues(now);
+            v._sched = m;
+            v._audioBase = now - m / 1000; /* audio time of this cycle's m=0 */
+          }
+          const at = (offMs) => v._audioBase + offMs / 1000;       /* wall-offset → audio clock */
+          if (v._sched < m + 5) v._sched = m + 5;                  /* never schedule behind the playhead */
           const horizon = Math.min(m + 600, st.TX);
           while (v._sched < horizon) {
             if (v._sched < st.VIS) {
               /* VIS for Robot 36 (code 8): leader, break, leader, start bit,
                  7 data bits LSB-first + even parity, stop — 30 ms per bit */
               const lead = st.VIS - 910;
-              if (v._sched < lead) { fo.setValueAtTime(1900, now + Math.max(0, v._sched - m) / 1000); v._sched = lead; continue; }
+              if (v._sched < lead) { fo.setValueAtTime(1900, Math.max(now, at(v._sched))); v._sched = lead; continue; }
               const seq = [[300, 1900], [10, 1200], [300, 1900], [30, 1200],
                 [30, 1300], [30, 1300], [30, 1300], [30, 1100], [30, 1300], [30, 1300], [30, 1300], [30, 1100],
                 [30, 1200]];
               let o = lead;
               for (const [dur, f] of seq) {
-                if (v._sched <= o) fo.setValueAtTime(f, now + (o - m) / 1000);
+                if (v._sched <= o) fo.setValueAtTime(f, Math.max(now, at(o)));
                 o += dur;
               }
               v._sched = st.VIS;
@@ -393,14 +404,18 @@ LP.audio = (() => {
             const line = Math.floor((v._sched - st.VIS) / st.LINE);
             if (line >= st.H) { v._sched = st.TX; break; }
             const cur = LP.sstv.lineCurves(line);
-            const lt = now + (st.VIS + line * st.LINE - m) / 1000;
+            const lt = at(st.VIS + line * st.LINE);
+            /* only whole lines that still lie in the future are scheduled, so
+               the two curves never straddle the playhead or a prior event */
             if (cur && lt >= now) {
-              fo.setValueAtTime(1200, lt);                        /* sync, 9 ms */
-              fo.setValueAtTime(1500, lt + 0.009);                /* porch, 3 ms */
-              fo.setValueCurveAtTime(cur.y, lt + 0.012, 0.087);   /* Y scan, 88 ms */
-              fo.setValueAtTime(cur.even ? 1500 : 2300, lt + 0.100); /* separator */
-              fo.setValueAtTime(1900, lt + 0.1045);               /* porch */
-              fo.setValueCurveAtTime(cur.c, lt + 0.106, 0.0435);  /* chroma, 44 ms */
+              try {
+                fo.setValueAtTime(1200, lt);                        /* sync, 9 ms */
+                fo.setValueAtTime(1500, lt + 0.009);                /* porch, 3 ms */
+                fo.setValueCurveAtTime(cur.y, lt + 0.012, 0.087);   /* Y scan, 88 ms */
+                fo.setValueAtTime(cur.even ? 1500 : 2300, lt + 0.100); /* separator */
+                fo.setValueAtTime(1900, lt + 0.1045);               /* porch */
+                fo.setValueCurveAtTime(cur.c, lt + 0.106, 0.0435);  /* chroma, 44 ms */
+              } catch { /* a clock hiccup at a cycle seam: skip this line, never throw into the ticker */ }
             }
             v._sched = st.VIS + (line + 1) * st.LINE;
           }
@@ -438,7 +453,7 @@ LP.audio = (() => {
       /* the net: while it runs, EVERY named voice keys the same characters at
          the same moment — each in its own timbre, all in one rhythm. The
          beacon paths above already schedule it; this covers the rest. */
-      if (LP.band.netActive(t) && st.type !== 'beacon' && st.type !== 'constant') {
+      if (LP.band.netActive(t) && st.type !== 'beacon' && st.type !== 'constant' && st.type !== 'jammer') {
         const lvl = str * sel * 0.28;
         const gg = v.g.gain;
         gg.cancelScheduledValues(now);

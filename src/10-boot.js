@@ -19,6 +19,10 @@ LP.warp = 0;
 LP.now = () => Date.now() + LP.warp;
 LP.date = (t) => new Date(t === undefined ? LP.now() : t);
 
+/* a real listener has touched the set at least once: gates the once-ever
+   ghost so an untouched page on a desk can never spend it */
+LP.engaged = false;
+
 LP.ticker = (() => {
   const tasks = new Set();
   let rafId = null, last = 0, inFrame = false;
@@ -26,9 +30,17 @@ LP.ticker = (() => {
     rafId = null;
     inFrame = true; /* a kick() from inside a task must not double-schedule the loop */
     const dt = Math.min(50, now - last) || 16; last = now;
-    for (const t of tasks) { if (t(dt, now) === false) tasks.delete(t); } /* Set tolerates delete-during-iteration */
-    inFrame = false;
-    if (rafId === null && tasks.size && !document.hidden) rafId = requestAnimationFrame(frame);
+    /* one throwing task must never brick the whole set: isolate each, and the
+       finally guarantees inFrame clears and the loop re-arms no matter what */
+    try {
+      for (const t of tasks) {
+        try { if (t(dt, now) === false) tasks.delete(t); }
+        catch (err) { console.error(err); }
+      }
+    } finally {
+      inFrame = false;
+      if (rafId === null && tasks.size && !document.hidden) rafId = requestAnimationFrame(frame);
+    }
   }
   function kick() { if (!inFrame && rafId === null && tasks.size && !document.hidden) { last = performance.now(); rafId = requestAnimationFrame(frame); } }
   document.addEventListener('visibilitychange', () => { if (!document.hidden) kick(); });

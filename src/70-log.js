@@ -120,7 +120,8 @@ LP.log = (() => {
           LP.say(`Retuned to ${e.id}, ${e.f.toFixed(1)} kilohertz.`);
         };
         li.addEventListener('click', go);
-        li.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); go(); } });
+        /* the ARIA button pattern activates on BOTH Enter and Space */
+        li.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); go(); } });
       }
       list.appendChild(li);
     }
