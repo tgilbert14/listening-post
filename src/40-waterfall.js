@@ -317,7 +317,9 @@ LP.display = (() => {
 
     const rm = LP.rm.matches;
     const rowEvery = rm ? 500 : 33;
-    if (t - lastRow > rowEvery) { lastRow = t; pushRow(t); }
+    /* the one permitted lie: on echo nights, for one seeded half-minute,
+       the glass runs one row ahead of the ear (see docs/PROPOSAL.md) */
+    if (t - lastRow > rowEvery) { lastRow = t; pushRow(LP.band.earlyNow(t) ? t + 33 : t); }
     if (t - lastRibbon > 500) { lastRibbon = t; ribbon(t); }
 
     LP.audio.update(t);

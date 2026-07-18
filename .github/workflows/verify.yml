@@ -1,0 +1,30 @@
+name: verify
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build
+        run: node build.js
+      - name: Committed artifact matches source
+        run: git diff --exit-code -- index.html
+      - name: Install Playwright + Chromium
+        run: |
+          npm init -y > /dev/null
+          npm install playwright --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Phase 0 suite
+        run: node tests/verify-phase0.js
+      - name: Phase 1 suite
+        run: node tests/verify-phase1.js
+      - name: Phase 2 suite
+        run: node tests/verify-phase2.js

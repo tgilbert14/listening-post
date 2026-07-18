@@ -8,7 +8,7 @@
    claims ON until the context runs; opt-out is remembered; hidden tabs
    are silent. */
 LP.audio = (() => {
-  let ctx = null, master = null, noiseGain = null, crashGain = null;
+  let ctx = null, master = null, noiseGain = null, crashGain = null, duet = null;
   let enabled = LP.store.get('sound', true);
   const chip = document.getElementById('sound-toggle');
   const voices = new Map();   /* station id -> voice */
@@ -22,7 +22,7 @@ LP.audio = (() => {
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -20; comp.knee.value = 22; comp.ratio.value = 5;
     master = ctx.createGain();
-    master.gain.value = 0.85;
+    master.gain.value = LP.clamp(Number(LP.store.get('vol', 85)) || 85, 0, 100) / 100;
     master.connect(comp).connect(ctx.destination);
 
     /* the noise floor: band hiss, shaped */
@@ -91,6 +91,16 @@ LP.audio = (() => {
   }
   if (chip) chip.addEventListener('click', toggle);
 
+  /* the volume knob: the one receiver control the set was missing */
+  const vol = document.getElementById('vol');
+  if (vol) {
+    vol.value = LP.clamp(Number(LP.store.get('vol', 85)) || 85, 0, 100);
+    vol.addEventListener('input', () => {
+      LP.store.set('vol', +vol.value);
+      if (master) master.gain.setTargetAtTime(+vol.value / 100, ctx.currentTime, 0.03);
+    });
+  }
+
   const audible = () => ctx && ctx.state === 'running' && enabled;
 
   /* ---------- voices ---------- */
@@ -116,9 +126,18 @@ LP.audio = (() => {
     };
 
     v.aux = v.aux || [];
-    if (st.type === 'beacon' || st.type === 'ghostcw' || st.type === 'constant') {
+    if (st.type === 'beacon' || st.type === 'ghostcw' || st.type === 'constant' || st.type === 'echo') {
       v.o = osc('sine', 600);
       v.o.connect(g);
+    } else if (st.type === 'pips') {
+      v.o = osc('sine', 1000); /* the standard pip, exactly */
+      v.o.connect(g);
+    } else if (st.type === 'jammer') {
+      v.o = osc('sawtooth', 163);
+      v.jf = ctx.createBiquadFilter();
+      v.jf.type = 'bandpass'; v.jf.frequency.value = 700; v.jf.Q.value = 2.2;
+      v.o.connect(v.jf).connect(g);
+      v.aux.push(v.jf);
     } else if (st.type === 'buzzer') {
       v.o = osc('sawtooth', 238);
       const f = ctx.createBiquadFilter();
@@ -325,6 +344,9 @@ LP.audio = (() => {
             fo.setValueAtTime(e.mark ? 1020 : 850, now + Math.max(0.001, (e.t - t) / 1000));
           }
         }
+        /* on storm nights, behind the forecast: the hull settles */
+        const hv = LP.band.hullEvent(t);
+        if (hv && v._hullT0 !== hv.t0) { v._hullT0 = hv.t0; hullSound(hv, v.g, str * sel); }
       } else if (st.type === 'night') {
         v.g.gain.setTargetAtTime(str * sel * 0.5, now, 0.05);
         const ix = st.toneIx(t);
@@ -361,6 +383,12 @@ LP.audio = (() => {
           v.g.gain.setTargetAtTime(st.activity(t) * str * sel * 0.2, now, K);
           if (v.syncG) v.syncG.gain.setTargetAtTime(0, now, 0.01);
         }
+      } else if (st.type === 'pips') {
+        /* fast keying constant: a 100 ms pip needs edges, not swells */
+        v.g.gain.setTargetAtTime(st.activity(t) >= 1 ? str * sel * 0.22 : 0, now, 0.004);
+      } else if (st.type === 'jammer') {
+        v.g.gain.setTargetAtTime(vol * 0.2, now, 0.05);
+        v.jf.frequency.setTargetAtTime(560 + 280 * Math.sin(t / 700), now, 0.05);
       } else if (st.type === 'crossing') {
         v.o.frequency.setTargetAtTime(st.toneHigh(t) ? 660 : 494, now, 0.02);
         v.g.gain.setTargetAtTime(vol * 0.22, now, 0.03);
@@ -446,6 +474,47 @@ LP.audio = (() => {
         const beat = LP.clamp(off * 1000, 24, 2400);
         v.o.frequency.setTargetAtTime(beat, now, 0.03);
         v.g.gain.setTargetAtTime(gh.strength() * 0.2 * Math.exp(-off * off / 4), now, 0.05);
+      }
+    }
+
+    /* the echo: the station you just left, again, lower and late */
+    const lde = LP.band.lde;
+    if (lde.echo && lde.band() === rx.band) {
+      const ef = lde.f();
+      const eoff = Math.abs(rx.vfo - ef);
+      if (eoff < 5) {
+        near.add('THE ECHO');
+        let v = voices.get('THE ECHO');
+        if (!v) { v = mkVoice({ type: 'echo', id: 'THE ECHO' }); voices.set('THE ECHO', v); }
+        if (v.pan) v.pan.pan.setTargetAtTime(LP.clamp((ef - rx.vfo) / 3.5, -0.75, 0.75), now, 0.08);
+        /* the same beat law as any carrier, shaded 40 Hz flat — a memory */
+        v.o.frequency.setTargetAtTime(LP.clamp(300 + eoff * 1000, 220, 1900) - 40, now, 0.03);
+        const esel = Math.exp(-(eoff * eoff) / (2 * 0.42 * 0.42));
+        v.g.gain.setTargetAtTime(lde.activity(t) * esel * 0.07, now, K);
+      }
+    }
+
+    /* THE DUET: after the departure, hold a quiet frequency long enough and
+       something rises a few cents off the ghost's old pitch — two tones
+       closing, a throb you feel more than hear. Move the dial: not there.
+       It never asks anything. It already knows. */
+    if (!LP.band.present()) {
+      const dwellMs = performance.now() - rx.dwellT0;
+      const slot = LP.mulberry((Math.floor(t / 900000) * 3 + 41) | 0)() < 0.15;
+      const wants = slot && dwellMs > 30000 && smeter < 0.12 && !document.hidden;
+      if (wants && !duet) {
+        duet = { g: ctx.createGain(), o1: ctx.createOscillator(), o2: ctx.createOscillator() };
+        duet.g.gain.value = 0;
+        duet.o1.frequency.value = 478;
+        duet.o2.frequency.value = 478 * Math.pow(2, 3 / 1200); /* three cents sharp */
+        duet.o1.connect(duet.g); duet.o2.connect(duet.g);
+        duet.g.connect(master);
+        duet.o1.start(); duet.o2.start();
+      }
+      if (duet) duet.g.gain.setTargetAtTime(wants ? 0.028 : 0, now, wants ? 4.0 : 0.05);
+      if (duet && !wants && duet.g.gain.value < 0.0005) {
+        try { duet.o1.stop(); duet.o2.stop(); duet.g.disconnect(); } catch { }
+        duet = null;
       }
     }
 
@@ -565,6 +634,34 @@ LP.audio = (() => {
       }
       o.start(now); o.stop(at + 0.2); dead(o);
     }
+  }
+
+  /* HULL NOISE: strain without source. A very low sweep under a filtered
+     groan, swelling slowly — an enormous structure settling, far off. */
+  function hullSound(ev, dest, lvl) {
+    const now = ctx.currentTime;
+    const amp = LP.clamp(lvl, 0, 1);
+    const dur = ev.dur / 1000;
+    const o = ctx.createOscillator(); o.type = 'sine';
+    o.frequency.setValueAtTime(ev.deep ? 41 : 52, now);
+    o.frequency.exponentialRampToValueAtTime(ev.deep ? 27 : 33, now + dur);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(amp * 0.09, now + dur * 0.4);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    const gr = ctx.createOscillator(); gr.type = 'sawtooth';
+    gr.frequency.setValueAtTime(55, now);
+    gr.frequency.exponentialRampToValueAtTime(38, now + dur);
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 130; lp.Q.value = 2.5;
+    const gg = ctx.createGain();
+    gg.gain.setValueAtTime(0.0001, now);
+    gg.gain.exponentialRampToValueAtTime(amp * 0.035, now + dur * 0.55);
+    gg.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    o.connect(g).connect(dest);
+    gr.connect(lp).connect(gg).connect(dest);
+    o.start(now); o.stop(now + dur + 0.1);
+    gr.start(now); gr.stop(now + dur + 0.1);
+    o.onended = () => { try { o.disconnect(); g.disconnect(); gr.disconnect(); lp.disconnect(); gg.disconnect(); } catch { } };
   }
 
   /* the band switch throws a physical relay: a click transient over a low

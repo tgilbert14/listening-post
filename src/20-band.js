@@ -87,12 +87,30 @@ LP.band = (() => {
     return d.getFullYear() * 1000
       + Math.round((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - Date.UTC(d.getFullYear(), 0, 1)) / 86400000) + 1;
   };
+  /* The groups are not random. They never were. Each day's five groups are
+     a straddling-checkerboard message under an additive key drawn from that
+     day's FORECAST text — the oldest numbers-station tradecraft there is.
+     Decode the RTTY, strip the spaces, subtract mod ten, read the board.
+     Nothing announces this, and nothing ever will. */
+  const BOARD = { /* straddling checkerboard; 2 and 6 prefix the long rows */
+    A: '0', T: '1', O: '3', N: '4', E: '5', S: '7', I: '8', R: '9',
+    B: '20', C: '21', D: '22', F: '23', G: '24', H: '25', J: '26', K: '27', L: '28', M: '29',
+    P: '60', Q: '61', U: '62', V: '63', W: '64', X: '65', Y: '66', Z: '67', '.': '68', '/': '69',
+  };
+  const SENTENCE = 'NO ONE LISTENS ALONE.';
   function latticeGroups() {
-    const rnd = LP.mulberry(daySeed());
+    let plain = '';
+    for (const ch of SENTENCE) if (BOARD[ch]) plain += BOARD[ch];
+    while (plain.length < 25) plain += '69';        /* nulls square the last group */
+    plain = plain.slice(0, 25);
+    const book = forecastText().replace(/ /g, '');  /* spaces carry no key */
     const groups = [];
     for (let g = 0; g < 5; g++) {
       let s = '';
-      for (let i = 0; i < 5; i++) s += Math.floor(rnd() * 10);
+      for (let i = 0; i < 5; i++) {
+        const ix = g * 5 + i;
+        s += String((Number(plain[ix]) + book.charCodeAt(ix % book.length)) % 10);
+      }
       groups.push(s);
     }
     return groups;
@@ -243,8 +261,12 @@ LP.band = (() => {
      daily. On rare days, one group is not random: it is the listener's own
      most-kept frequency, read back in tone-digits — and on those days one
      note of the music box plays flat. Nothing announces this. */
+  /* some days a rasping wall parks itself exactly where the numbers live —
+     and the numbers move 2 kHz up to get clear of it. Nobody explains this.
+     The band just... adjusts. */
+  const jammerToday = () => LP.mulberry(daySeed() + 555)() < 0.13;
   S.push({
-    id: 'THE LATTICE', name: 'THE LATTICE', f: 6727.0, band: 1, type: 'buzzer', bw: 0.5,
+    id: 'THE LATTICE', name: 'THE LATTICE', get f() { return jammerToday() ? 6729.0 : 6727.0; }, band: 1, type: 'buzzer', bw: 0.5,
     note: 'five groups of five; different tomorrow',
     _seed: -1, _g: null, _traceDay: false,
     /* the ident melody: eight notes, semitones from A4, ends low, unresolved.
@@ -476,6 +498,87 @@ LP.band = (() => {
     },
   });
 
+  /* ---------- THE PIPS: a time station ---------- */
+  /* Five short, one long, on the minute, every minute, forever. The most
+     comforting station on any band — which is exactly why, on one rare
+     seeded night, pips start going missing. Count the gaps. */
+  S.push({
+    id: 'THE PIPS', name: 'THE PIPS', f: 9500.0, band: 2, type: 'pips', bw: 0.15,
+    note: 'on the minute, every minute',
+    failNight() { return LP.mulberry(daySeed() + 2027)() < 0.04; },
+    activity(t) {
+      if (netActive(t)) return morseOn(net.m, t - net.t0) ? 1 : 0;
+      const s = (t / 1000) % 60;
+      const shortPip = s >= 55 && (s % 1) < 0.1;
+      const longPip = s < 0.5;
+      if (!shortPip && !longPip) return 0.06;      /* the carrier idles, barely */
+      if (this.failNight()) {
+        const pipIx = Math.floor(t / 60000) * 6 + (longPip ? 5 : Math.floor(s) - 55);
+        if (LP.mulberry((pipIx * 131 + 7) | 0)() < 0.15) return 0.06; /* ...missing */
+      }
+      return 1;
+    },
+  });
+
+  /* THE JAMMER: the wall itself. It transmits nothing. It only takes. */
+  S.push({
+    id: 'THE JAMMER', name: 'THE JAMMER', f: 6727.0, band: 1, type: 'jammer', bw: 1.6,
+    note: 'it sits where the numbers were',
+    isOn() { return jammerToday(); },
+    activity(t) {
+      if (netActive(t)) return 0; /* it does not join the net. it is not one of us. */
+      return 0.75 + 0.25 * Math.sin(t / 90) * Math.sin(t / 1300);
+    },
+  });
+
+  /* ---------- THE FAR FIELD ---------- */
+  /* THE WARNING: an automated distress call, repeating, degrading. A
+     short-stay listener hears a mayday and pencils it in as one. Once an
+     hour — the last three minutes — it keys the one message that inverts
+     the reading. It is not asking for help. It is telling you not to come.
+     The log quietly amends itself for whoever was still there to copy it. */
+  S.push((() => {
+    const cry = humanize(compileMorse('SOS SOS DE VESSEL QTH 31N 48E QRK? K', 10, 4000), LP.mulberry(9538), 120);
+    const tail = compileMorse('NIL QRK NIL QSP DO NOT ANSWER DO NOT COME', 10, 5000);
+    return {
+      id: 'THE WARNING', name: 'THE WARNING', f: 9538.0, band: 2, type: 'beacon', bw: 0.12,
+      wpm: 10, note: 'a mayday, repeating',
+      _m: cry, text: 'SOS SOS DE VESSEL QTH 31N 48E QRK? K',
+      tailActive(t) { return Math.floor(t / 60000) % 60 >= 57; },
+      keyed(t) {
+        if (t >= net.t0 && t < net.until) return { m: net.m, off: t - net.t0 };
+        if (this.tailActive(t)) {
+          const h0 = Math.floor(t / 3600000) * 3600000 + 57 * 60000;
+          return { m: tail, off: t - h0 };
+        }
+        return { m: cry, off: t };
+      },
+      activity(t) { const k = this.keyed(t); return morseOn(k.m, k.off) ? 1 : 0; },
+    };
+  })());
+
+  /* ---------- DX: one night only ---------- */
+  /* Some nights — the same nights for every listener on Earth, seeded by
+     the UTC date — a stranger crosses the whole sky. Gone by morning. */
+  const utcDaySeed = () => {
+    const d = new Date();
+    return d.getUTCFullYear() * 1000
+      + Math.round((Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - Date.UTC(d.getUTCFullYear(), 0, 1)) / 86400000) + 1;
+  };
+  {
+    const r = LP.mulberry(utcDaySeed() + 9090);
+    if (r() < 0.17) {
+      const DXS = [
+        { id: 'ORPHAN', f: 3230.0, band: 0, text: 'DE ORPHAN ORPHAN QSL VIA NIGHT ONLY K', wpm: 11 },
+        { id: '4XR-9', f: 6614.0, band: 1, text: 'VVV DE 4XR9 4XR9 EX PACIFIC RELAY 73 K', wpm: 19 },
+        { id: 'THE LIGHTSHIP', f: 9315.0, band: 2, text: 'DE LIGHTSHIP QTH UNKNOWN DRIFTING K', wpm: 9 },
+      ];
+      const d = DXS[Math.floor(r() * DXS.length)];
+      beacon(d.id, d.f, d.band, d.text, d.wpm, (r() - 0.5) * 120, 'one night only ★');
+      S[S.length - 1].isOn = () => { const h = new Date().getHours(); return h >= 20 || h < 6; };
+    }
+  }
+
   /* ---------- the underbrush: the band is INHABITED ---------- */
   /* Dozens of minor signals seeded fresh each day — weak CW ragchews,
      drifting carriers, splatter. Not loggable, never named: they exist so
@@ -533,7 +636,82 @@ LP.band = (() => {
   }
   function minorStrength(m, t) {
     return LP.clamp(m.base * bandFactor(m.band, t) * (0.7 + 0.3 * Math.sin(t / 7000 + m.phase)), 0, 1)
-      * (1 - weather.sid(t) * 0.85); /* a flare flattens the underbrush too */
+      * (1 - weather.sid(t) * 0.85)  /* a flare flattens the underbrush too */
+      * sleeper.gain(m, t);
+  }
+
+  /* ---------- more of THE FAR FIELD ---------- */
+  /* THE SLEEPER: one carrier in the underbrush, on rare seeded nights,
+     breathes — twelve to the minute, the rate of something large at rest.
+     Now and then it stops. Slightly too long. It is not on the station
+     list. It is not loggable. It is not acknowledged, here or anywhere. */
+  const sleeper = {
+    m: null, _tried: false,
+    night() { return LP.mulberry(daySeed() + 808)() < 0.13; },
+    gain(m, t) {
+      if (!this._tried) {
+        this._tried = true;
+        if (this.night()) {
+          const carriers = minors.filter(x => x.kind === 'carrier');
+          if (carriers.length) this.m = carriers[Math.floor(LP.mulberry(daySeed() + 809)() * carriers.length)];
+        }
+      }
+      if (m !== this.m) return 1;
+      const ph = t % 47000;
+      if (ph > 36000) return 0.35;                 /* the pause. count it. */
+      const b = Math.sin(ph / 5000 * LP.TAU);      /* twelve to the minute */
+      return 0.55 + 0.45 * Math.max(0, b) + 0.1 * Math.min(0, b);
+    },
+  };
+
+  /* LONG DELAY: on rare seeded nights the band echoes — leave a station
+     and, seconds later, its last minute repeats below it: weaker, lower,
+     late. Reported since 1927. Never fully explained. Not explained here. */
+  const lde = {
+    echo: null,
+    night() { return LP.mulberry(daySeed() + 404)() < 0.11; },
+    depart(st, t) { /* the log calls this when a lock lets go */
+      if (!this.night() || !st || !st.activity || this.echo) return;
+      const r = LP.mulberry((Math.floor(t / 1000) * 7 + 13) | 0);
+      if (r() > 0.5) return;
+      const lag = 8000 + r() * 32000;
+      this.echo = { st, lag, from: t + lag, until: t + lag + 9000 };
+    },
+    activity(t) {
+      if (!this.echo) return 0;
+      if (t > this.echo.until) { this.echo = null; return 0; }
+      if (t < this.echo.from) return 0;
+      return this.echo.st.activity(t - this.echo.lag);
+    },
+    f() { return this.echo ? this.echo.st.f - 0.7 : 0; },
+    band() { return this.echo ? this.echo.st.band : -1; },
+  };
+
+  /* HULL NOISE: on storm nights, behind the forecast, something enormous
+     settles. The antenna farm, in the wind. Of course. The antenna farm. */
+  function hullEvent(t) {
+    if (weather.k() < 6) return null;
+    const h = new Date(t).getHours();
+    if (h >= 6 && h < 20) return null;
+    const SLOT = 180000;
+    const slot = Math.floor(t / SLOT);
+    const r = LP.mulberry((daySeed() * 3 + slot * 977) | 0);
+    if (r() > 0.4) return null;
+    const t0 = slot * SLOT + 20000 + r() * (SLOT - 60000);
+    const dur = 2500 + r() * 3500;
+    if (t < t0 || t >= t0 + dur) return null;
+    return { t0, dur, deep: r() < 0.5 };
+  }
+
+  /* ONE ROW EARLY: the single permitted lie. On echo nights, for one
+     seeded half-minute, the glass runs one raster row AHEAD of the ear.
+     This is the only sanctioned violation of the house rule — one row,
+     once a night, only on nights the band is already repeating itself. */
+  function earlyNow(t) {
+    if (!lde.night()) return false;
+    const minute = Math.floor(LP.mulberry(daySeed() + 1927)() * 1440);
+    const m = Math.floor((t % 86400000) / 60000);
+    return m === minute && (t % 60000) < 30000;
   }
 
   /* ---------- propagation ---------- */
@@ -662,6 +840,11 @@ LP.band = (() => {
       const a = ghost.activity(t) * ghost.strength();
       if (a > 0.001) paint(out, fLo, fHi, ghost.f, 0.1, a, null, t);
     }
+    /* the echo: what you just left, again, lower and late */
+    if (lde.echo && lde.band() === bandIx) {
+      const a = lde.activity(t) * 0.16;
+      if (a > 0.002) paint(out, fLo, fHi, lde.f(), 0.1, a, null, t);
+    }
     return out;
   }
   function paint(out, fLo, fHi, f, bw, amp, st, t) {
@@ -684,6 +867,14 @@ LP.band = (() => {
       const w = Math.max(2, sigma * 2);
       for (let i = Math.max(0, Math.floor(center - w)); i < Math.min(cols, center + w); i++) {
         out[i] += amp * (0.35 + 0.65 * Math.abs(Math.sin(i * 1.7 + t / 60)));
+      }
+      return;
+    }
+    if (st && st.type === 'jammer') {
+      /* a wall of hash: wideband, textured, unmusical */
+      const w = Math.max(2, sigma * 2);
+      for (let i = Math.max(0, Math.floor(center - w)); i < Math.min(cols, center + w); i++) {
+        out[i] += amp * (0.5 + 0.5 * Math.abs(Math.sin(i * 12.9898 + t / 35)));
       }
       return;
     }
@@ -736,6 +927,7 @@ LP.band = (() => {
     compileMorse, morseOn, decodeMorse, sferic, net, netActive, keyEdges,
     minors, minorActive, minorF, minorStrength,
     present, roomEvent, crossRead, weather,
+    lde, hullEvent, earlyNow, jammerToday,
   };
 })();
 

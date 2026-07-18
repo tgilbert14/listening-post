@@ -19,11 +19,12 @@ LP.log = (() => {
       rst: typeof e.rst === 'string' ? e.rst : '',
       cls: typeof e.cls === 'string' ? e.cls : '',
       pic: typeof e.pic === 'string' ? e.pic : '',
+      date: typeof e.date === 'string' ? e.date : '',
     }));
   const list = document.getElementById('log-list');
   const seen = new Set(entries.map(e => e.id));
   let netDone = LP.store.get('net', false);
-  let lockedOn = null, lockT0 = 0, lastActive = 0;
+  let lockedOn = null, lockT0 = 0, lastActive = 0, prevLock = null;
   let pendingPic = null;   /* a postcard that finished before its line existed */
 
   function has(id) { return seen.has(id); }
@@ -58,7 +59,9 @@ LP.log = (() => {
       at: `${pad2(d.getHours())}:${pad2(d.getMinutes())}`,
       utc: `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}Z`,
       rst: report || '', cls: cls || '', pic: '',
+      date: `${d.getUTCFullYear()}${pad2(d.getUTCMonth() + 1)}${pad2(d.getUTCDate())}`,
     };
+    if (navigator.vibrate) navigator.vibrate(12); /* the pencil lands */
     if (pendingPic && id === 'POSTCARD') { e.pic = pendingPic.url; if (pendingPic.caption) e.note = pendingPic.caption; pendingPic = null; }
     entries.push(e);
     store();
@@ -104,9 +107,91 @@ LP.log = (() => {
         img.alt = `The received postcard: ${e.note || 'a picture'}.`;
         li.appendChild(img);
       }
+      /* the log is a map: a line with a frequency retunes the set */
+      if (e.f) {
+        li.tabIndex = 0;
+        li.setAttribute('role', 'button');
+        li.setAttribute('aria-label', `Retune to ${e.id}, ${e.f.toFixed(1)} kilohertz, ${e.band} band.`);
+        li.classList.add('jump');
+        const go = () => {
+          const bi = LP.band.BANDS.findIndex(b => b.name === e.band);
+          if (bi >= 0 && bi !== LP.rx.band && LP.setBand) LP.setBand(bi);
+          LP.tuneTo(e.f, true);
+          LP.say(`Retuned to ${e.id}, ${e.f.toFixed(1)} kilohertz.`);
+        };
+        li.addEventListener('click', go);
+        li.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); go(); } });
+      }
       list.appendChild(li);
     }
   }
+
+  /* ---------- keepsakes: the log leaves the building ---------- */
+  function download(name, url, revoke) {
+    const a = document.createElement('a');
+    a.href = url; a.download = name; a.click();
+    if (revoke) setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
+  /* ADIF — the real amateur-log interchange format; any ham logger opens it */
+  function exportAdif() {
+    const field = (k, v) => `<${k}:${String(v).length}>${v}`;
+    const d = new Date();
+    const today = `${d.getUTCFullYear()}${pad2(d.getUTCMonth() + 1)}${pad2(d.getUTCDate())}`;
+    let out = 'The Listening Post station log\n<ADIF_VER:5>3.1.4<PROGRAMID:18>THE LISTENING POST<EOH>\n';
+    for (const e of entries) {
+      if (!e.f) continue;
+      out += [
+        field('CALL', e.id.replace(/[^A-Z0-9/]/gi, '') || 'UNKNOWN'),
+        field('QSO_DATE', e.date || today),
+        field('TIME_ON', (e.utc || '0000').replace(/[:Z]/g, '').padStart(4, '0')),
+        field('FREQ', (e.f / 1000).toFixed(4)),
+        field('MODE', (e.rst || '').length === 3 ? 'CW' : 'AM'),
+        field('RST_RCVD', e.rst || '599'),
+        field('COMMENT', e.note || ''),
+        '<EOR>',
+      ].join('') + '\n';
+    }
+    download('listening-post.adi', URL.createObjectURL(new Blob([out], { type: 'text/plain' })), true);
+    LP.say('Log exported as ADIF.');
+  }
+  /* a QSL card: the night, pressed onto card stock */
+  function exportQsl() {
+    const W = 880, H = 560;
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const x = c.getContext('2d');
+    x.fillStyle = '#e7dfc9'; x.fillRect(0, 0, W, H);
+    x.strokeStyle = 'rgba(88,80,60,.14)';
+    for (let y = 120; y < H - 70; y += 36) { x.beginPath(); x.moveTo(44, y + 24.5); x.lineTo(W - 44, y + 24.5); x.stroke(); }
+    x.fillStyle = '#4a5a4e';
+    x.font = '600 34px Georgia, serif';
+    x.fillText('THE LISTENING POST', 44, 62);
+    x.fillRect(44, 76, W - 88, 3);
+    x.font = 'italic 15px Georgia, serif'; x.fillStyle = '#6a746c';
+    x.textAlign = 'right';
+    const d = new Date();
+    x.fillText(`${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())} · heard on a desert receiver`, W - 44, 62);
+    x.textAlign = 'left';
+    x.font = '17px Consolas, monospace';
+    let y = 144;
+    for (const e of entries.filter(v => v.id !== 'ALL STATIONS').slice(0, 10)) {
+      x.fillStyle = '#2c3230';
+      x.fillText(e.id.padEnd(14).slice(0, 14), 44, y);
+      x.fillStyle = '#7a3d2c';
+      x.fillText(e.f ? `${e.f.toFixed(1)} kHz` : '—', 300, y);
+      x.fillStyle = '#4a5a4e';
+      x.fillText(`${e.band || ''}  ${e.utc || ''}  ${e.rst ? 'RST ' + e.rst : ''}`, 470, y);
+      y += 36;
+    }
+    x.font = 'italic 16px Georgia, serif'; x.fillStyle = '#6a746c';
+    x.textAlign = 'right';
+    x.fillText('73 — the band is open · desertdatalabs.com', W - 44, H - 40);
+    download('listening-post-qsl.png', c.toDataURL('image/png'));
+    LP.say('QSL card saved.');
+  }
+  const adifBtn = document.getElementById('log-adif');
+  const qslBtn = document.getElementById('log-qsl');
+  if (adifBtn) adifBtn.addEventListener('click', exportAdif);
+  if (qslBtn) qslBtn.addEventListener('click', exportQsl);
 
   /* the net: seven names in the book and the band answers — once, from the top */
   function maybeNet() {
@@ -149,6 +234,21 @@ LP.log = (() => {
     const gh = LP.band.ghost;
     if (gh.state === 'asking' && Math.abs(LP.rx.vfo - gh.f) < 0.4) {
       add('THE OTHER', gh.f, 'it asked who was there', 'net');
+    }
+
+    /* releasing a lock can leave an echo on the right nights */
+    const cur = (candidate && t - lastActive < 3000) ? candidate : null;
+    if (prevLock && prevLock !== cur) LP.band.lde.depart(prevLock, t);
+    prevLock = cur;
+
+    /* THE WARNING quietly amends its own line for whoever stayed to copy
+       the hourly tail. Nothing is announced. The book just changes. */
+    if (cur && cur.id === 'THE WARNING' && cur.tailActive && cur.tailActive(t)) {
+      const e = entries.find(x => x.id === 'THE WARNING');
+      if (e && e.note !== 'it is not asking for help') {
+        e.note = 'it is not asking for help';
+        store(); render();
+      }
     }
     lastCheckT = t;
   }
