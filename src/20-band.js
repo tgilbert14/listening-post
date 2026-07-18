@@ -83,7 +83,7 @@ LP.band = (() => {
   /* local calendar date, UTC arithmetic: the seed rolls at local midnight and
      never drifts an hour across a DST change */
   const daySeed = () => {
-    const d = new Date();
+    const d = LP.date();
     return d.getFullYear() * 1000
       + Math.round((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - Date.UTC(d.getFullYear(), 0, 1)) / 86400000) + 1;
   };
@@ -202,7 +202,7 @@ LP.band = (() => {
     net.m = present()
       ? compileMorse('73 73 73', 14, 2600)
       : humanize(compileMorse('73 73 %', 14, 2600), LP.mulberry(4257), 1200 / 14);
-    net.t0 = Date.now();
+    net.t0 = LP.now();
     net.until = net.t0 + net.m.total;
   };
   const netActive = (t) => t >= net.t0 && t < net.until;
@@ -332,18 +332,39 @@ LP.band = (() => {
      phone ringing far away. Wall-clock scheduled — two listeners at the same
      minute hear the same room, and can ask each other "did you hear it too?"
      After the departure, the buzz continues. The room is empty now. */
+  /* days since THE OTHER was logged; -1 while it is still here */
+  function elegyDays() {
+    if (present()) return -1;
+    const e = LP.log && LP.log.entries && LP.log.entries.find(x => x.id === 'THE OTHER');
+    if (!e || !e.date || e.date.length !== 8) return 999; /* departed, date unknown: long ago */
+    const dep = Date.UTC(+e.date.slice(0, 4), +e.date.slice(4, 6) - 1, +e.date.slice(6, 8));
+    return Math.floor((LP.now() - dep) / 86400000);
+  }
   function roomEvent(t) {
-    if (!present()) return null;
+    if (present()) {
+      const SLOT = 210000;
+      const slot = Math.floor(t / SLOT);
+      const r = LP.mulberry((daySeed() * 5 + Math.imul(slot, 2654435761)) | 0);
+      if (r() > 0.42) return null;
+      const kinds = ['thud', 'chair', 'door', 'murmur', 'murmur', 'phone'];
+      const kind = kinds[Math.floor(r() * kinds.length)];
+      const t0 = slot * SLOT + 15000 + Math.floor(r() * (SLOT - 45000));
+      const dur = kind === 'murmur' ? 2500 + r() * 2500 : (kind === 'phone' ? 6500 : 1100);
+      if (t < t0 || t >= t0 + dur) return null;
+      return { kind, t0, dur };
+    }
+    /* THE LONG ELEGY: the room stays empty for a week. Then, one night —
+       a chair scrapes. Higher. Tentative. Unfamiliar. Someone new is
+       moving in, and the buzz just keeps buzzing. */
+    if (elegyDays() < 7) return null;
     const SLOT = 210000;
     const slot = Math.floor(t / SLOT);
-    const r = LP.mulberry((daySeed() * 5 + Math.imul(slot, 2654435761)) | 0);
-    if (r() > 0.42) return null;
-    const kinds = ['thud', 'chair', 'door', 'murmur', 'murmur', 'phone'];
-    const kind = kinds[Math.floor(r() * kinds.length)];
+    const r = LP.mulberry((daySeed() * 7 + Math.imul(slot, 40503)) | 0);
+    if (r() > 0.12) return null;
+    const kind = r() < 0.6 ? 'chair' : 'thud';
     const t0 = slot * SLOT + 15000 + Math.floor(r() * (SLOT - 45000));
-    const dur = kind === 'murmur' ? 2500 + r() * 2500 : (kind === 'phone' ? 6500 : 1100);
-    if (t < t0 || t >= t0 + dur) return null;
-    return { kind, t0, dur };
+    if (t < t0 || t >= t0 + 1100) return null;
+    return { kind, t0, dur: 1100, newcomer: true };
   }
 
   /* THE FORECAST: real RTTY — 45.45-baud ITA2 Baudot FSK, 170 Hz shift.
@@ -429,7 +450,13 @@ LP.band = (() => {
   S.push({
     id: 'HOMECOMING', name: 'HOMECOMING', f: 6810.0, band: 1, type: 'night', bw: 0.8,
     note: 'eleven tones, only after dark',
-    isOn() { const h = new Date().getHours(); return h >= 21 || h < 6; },
+    isOn() {
+      const d = LP.date();
+      /* the solstices: the longest and shortest nights, it never signs off */
+      if ((d.getMonth() === 5 || d.getMonth() === 11) && d.getDate() === 21) return true;
+      const h = d.getHours();
+      return h >= 21 || h < 6;
+    },
     activity(t) {
       if (netActive(t)) return morseOn(net.m, t - net.t0) ? 1 : 0; /* even in daylight: once */
       if (!this.isOn()) return 0;
@@ -446,9 +473,18 @@ LP.band = (() => {
     id: 'POSTCARD', name: 'POSTCARD', f: 9430.0, band: 2, type: 'sstv', bw: 2.4,
     note: 'a picture, thirty-two lines at a time',
     _m: compileMorse('DE POSTCARD PIC QRV', 16, 3000),
-    PERIOD: 360000, TX: 200000, H: 240,
-    lineMs() { return this.TX / this.H; },
-    prog(t) { const m = t % this.PERIOD; return m < this.TX ? m / this.TX : -1; },
+    /* REAL Robot 36 timing: a VIS header, then 240 lines at 150 ms each —
+       sync, porch, 88 ms of Y, separator, 44 ms of alternating chroma.
+       The six-minute cycle keeps the fiction; the frame keeps the spec. */
+    PERIOD: 360000, H: 240, VIS: 2400, LINE: 150,
+    get FRAME() { return this.H * this.LINE; },
+    get TX() { return this.VIS + this.FRAME; },
+    lineMs() { return this.LINE; },
+    prog(t) {
+      const m = t % this.PERIOD;
+      if (m >= this.TX) return -1;
+      return m < this.VIS ? 0 : (m - this.VIS) / this.FRAME;
+    },
     activity(t) {
       if (netActive(t)) return morseOn(net.m, t - net.t0) ? 1 : 0; /* the picture can wait */
       const m = t % this.PERIOD;
@@ -465,7 +501,7 @@ LP.band = (() => {
     id: 'THE CROSSING', name: 'THE CROSSING', f: 6660.0, band: 1, type: 'crossing', bw: 0.35,
     note: 'some nights, a bell far away ★',
     isOn() {
-      const h = new Date().getHours();
+      const h = LP.date().getHours();
       const night = h >= 20 || h < 6;
       return night && LP.mulberry(daySeed() + 777)() < 0.28;
     },
@@ -508,6 +544,11 @@ LP.band = (() => {
     failNight() { return LP.mulberry(daySeed() + 2027)() < 0.04; },
     activity(t) {
       if (netActive(t)) return morseOn(net.m, t - net.t0) ? 1 : 0;
+      const d = LP.date(t);
+      /* the first minute of the year: twelve strikes instead of six pips */
+      if (d.getMonth() === 0 && d.getDate() === 1 && d.getHours() === 0 && d.getMinutes() === 0) {
+        return (t / 1000 % 5) < 0.5 ? 1 : 0.06;
+      }
       const s = (t / 1000) % 60;
       const shortPip = s >= 55 && (s % 1) < 0.1;
       const longPip = s < 0.5;
@@ -561,7 +602,7 @@ LP.band = (() => {
   /* Some nights — the same nights for every listener on Earth, seeded by
      the UTC date — a stranger crosses the whole sky. Gone by morning. */
   const utcDaySeed = () => {
-    const d = new Date();
+    const d = LP.date();
     return d.getUTCFullYear() * 1000
       + Math.round((Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - Date.UTC(d.getUTCFullYear(), 0, 1)) / 86400000) + 1;
   };
@@ -575,7 +616,7 @@ LP.band = (() => {
       ];
       const d = DXS[Math.floor(r() * DXS.length)];
       beacon(d.id, d.f, d.band, d.text, d.wpm, (r() - 0.5) * 120, 'one night only ★');
-      S[S.length - 1].isOn = () => { const h = new Date().getHours(); return h >= 20 || h < 6; };
+      S[S.length - 1].isOn = () => { const h = LP.date().getHours(); return h >= 20 || h < 6; };
     }
   }
 
@@ -720,7 +761,7 @@ LP.band = (() => {
      and now it has weather: storm days absorb the low band, sporadic E
      opens the high band on nights it has no business being open. */
   function bandFactor(bandIx, t) {
-    const d = new Date();
+    const d = LP.date();
     const h = d.getHours() + d.getMinutes() / 60;
     const day = 0.5 + 0.5 * Math.cos(((h - 13) / 24) * 2 * Math.PI); /* 1 at 13:00, 0 at 01:00 */
     const k = weather.k();
@@ -927,7 +968,7 @@ LP.band = (() => {
     compileMorse, morseOn, decodeMorse, sferic, net, netActive, keyEdges,
     minors, minorActive, minorF, minorStrength,
     present, roomEvent, crossRead, weather,
-    lde, hullEvent, earlyNow, jammerToday,
+    lde, hullEvent, earlyNow, jammerToday, elegyDays,
   };
 })();
 

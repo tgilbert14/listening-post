@@ -122,12 +122,14 @@ const check = (name, ok, detail = '') => {
   check('K-index in 0..8 and stable within a day', wx.k >= 0 && wx.k <= 8 && wx.k === wx.k2, `K=${wx.k}`);
   check('SID severity in 0..1', wx.sid >= 0 && wx.sid <= 1, `sid=${wx.sid}`);
 
-  // ---- 6. SSTV: luma band + sync plumbing + line timing ----
+  // ---- 6. SSTV: Robot 36 line timing (frame excludes the VIS header) ----
   const sstv = await page.evaluate(() => {
     const st = LP.band.stations.find((s) => s.type === 'sstv');
-    return { lineMs: st.lineMs(), H: st.H, TX: st.TX };
+    return { lineMs: st.lineMs(), H: st.H, TX: st.TX, VIS: st.VIS, FRAME: st.FRAME };
   });
-  check('SSTV line timing derives from TX/H', Math.abs(sstv.lineMs - sstv.TX / sstv.H) < 0.001, `${sstv.lineMs.toFixed(1)}ms/line`);
+  check('SSTV line timing derives from FRAME/H (Robot 36: 150 ms)',
+    Math.abs(sstv.lineMs - sstv.FRAME / sstv.H) < 0.001 && sstv.TX === sstv.VIS + sstv.FRAME,
+    `${sstv.lineMs.toFixed(1)}ms/line`);
 
   // ---- 7. Forecast text is daily and mentions band condition ----
   check('forecast text carries a band condition', /ALL SECTORS (THE BAND IS OPEN|BAND UNSETTLED|ROUGH BAND EXPECT FADES)/.test(rtty.text), rtty.text.slice(-40));

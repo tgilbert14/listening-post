@@ -305,7 +305,7 @@ LP.display = (() => {
   let lastVfoDrawn = 0;
   function loop(dt) {
     if (!cv.width) { resize(); if (!cv.width) return; }
-    const t = Date.now();
+    const t = LP.now();
     const dwell = performance.now() - LP.rx.dwellT0;
 
     /* the ghost stalks quiet frequencies */

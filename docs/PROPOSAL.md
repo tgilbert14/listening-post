@@ -2,17 +2,21 @@
 
 > **Status (2026-07-18):**
 > **Phase 0 ✅ shipped** (every confirmed evaluation finding fixed).
-> **Phase 1 ✅ shipped** — real ITA2 Baudot RTTY, living ionosphere, SSTV sync/luma
-> structure, S-unit meter. *Deferred: full VIS/Scottie spec timing, AGC, sideband select.*
+> **Phase 1 ✅ shipped** — real ITA2 Baudot RTTY, living ionosphere, S-unit meter —
+> and now **full Robot 36 SSTV** (VIS header, 150 ms lines, Y + alternating chroma
+> scheduled on the audio clock) plus **AGC**. *Deferred: sideband select.*
 > **Phase 2 ✅ shipped** — THE PIPS, THE JAMMER (and the numbers that move), the
 > straddling-checkerboard cipher under the FORECAST book key, DX one-night stations.
 > *Deferred: WEFAX, seasonal specials, the long elegy arc.*
 > **Phase 2½ ✅ shipped** — THE WARNING, LONG DELAY, THE SLEEPER, THE PIPS FAIL,
 > HULL NOISE, THE DUET, ONE ROW EARLY: all live, all seeded, all deniable.
 > **Phase 3 ✅ shipped** — PWA (installable/offline), ADIF + QSL export, click-to-retune
-> log, haptics, volume knob, non-visual signal-here scanning.
-> **Phase 4 ◐** — CI (build-drift gate + three Playwright suites) shipped.
-> *Deferred: `?dev` time-warp harness, station-type registry refactor.*
+> log, haptics, volume knob, non-visual signal-here scanning. The long elegy's first
+> movement (the new tenant's chair) and seasonal traffic (solstice HOMECOMING, the
+> New Year strikes) are live.
+> **Phase 4 ✅ shipped** — CI (build-drift gate + four Playwright suites) and the
+> `?dev` time-warp workshop bar with seeded-night flags.
+> *Deferred: WEFAX, sideband select, station-type registry refactor.*
 
 *The maximal upgrade plan. Built directly on the confirmed findings in
 [`EVALUATION.md`](./EVALUATION.md): every defect becomes a fix, every fix becomes a

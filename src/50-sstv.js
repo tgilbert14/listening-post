@@ -158,8 +158,10 @@ LP.sstv = (() => {
     sx.fillText(curCaption, W / 2, H - 6);
     cv.setAttribute('aria-label', `Received picture: ${curCaption.toLowerCase()}.`);
 
-    /* luma table for the audio */
+    /* luma table for the visuals, full RGBA kept for the Robot 36 encoder */
     const img = sx.getImageData(0, 0, W, H).data;
+    rgbData = img;
+    curveCache.clear();
     luma = new Uint8Array(W * H);
     for (let i = 0; i < W * H; i++) {
       luma[i] = (img[i * 4] * 0.3 + img[i * 4 + 1] * 0.55 + img[i * 4 + 2] * 0.15);
@@ -171,6 +173,36 @@ LP.sstv = (() => {
     const line = Math.min(H - 1, Math.floor(prog * H));
     const x = Math.min(W - 1, Math.floor((prog * H % 1) * W));
     return luma[line * W + x] / 255;
+  }
+
+  /* ---------- the Robot 36 encoder ---------- */
+  /* per-line frequency curves for the audio scheduler: Y over 88 ms at 160
+     points (black 1500 Hz, white 2300), then R-Y on even lines / B-Y on odd
+     over 44 ms at 80 points, centered on 1900. The whistle IS the picture. */
+  let rgbData = null;
+  const curveCache = new Map();
+  function lineCurves(line) {
+    if (!rgbData || line < 0 || line >= H) return null;
+    let c = curveCache.get(line);
+    if (c) return c;
+    const y = new Float32Array(160), cr = new Float32Array(80);
+    const row = line * W;
+    for (let i = 0; i < 160; i++) {
+      const px = (row + Math.min(W - 1, i * 2)) * 4;
+      const Y = rgbData[px] * 0.299 + rgbData[px + 1] * 0.587 + rgbData[px + 2] * 0.114;
+      y[i] = 1500 + (Y / 255) * 800;
+    }
+    const even = line % 2 === 0;
+    for (let i = 0; i < 80; i++) {
+      const px = (row + Math.min(W - 1, i * 4)) * 4;
+      const Y = rgbData[px] * 0.299 + rgbData[px + 1] * 0.587 + rgbData[px + 2] * 0.114;
+      const ch = even ? (rgbData[px] - Y) * 0.713 : (rgbData[px + 2] - Y) * 0.564;
+      cr[i] = 1900 + LP.clamp(ch, -128, 128) / 128 * 350;
+    }
+    c = { y, c: cr, even };
+    if (curveCache.size > 300) curveCache.clear();
+    curveCache.set(line, c);
+    return c;
   }
 
   /* ---------- the develop panel ---------- */
@@ -267,5 +299,5 @@ LP.sstv = (() => {
     }
   }
 
-  return { update, lumaAt };
+  return { update, lumaAt, lineCurves };
 })();

@@ -8,7 +8,7 @@
    claims ON until the context runs; opt-out is remembered; hidden tabs
    are silent. */
 LP.audio = (() => {
-  let ctx = null, master = null, noiseGain = null, crashGain = null, duet = null;
+  let ctx = null, master = null, agc = null, noiseGain = null, crashGain = null, duet = null;
   let enabled = LP.store.get('sound', true);
   const chip = document.getElementById('sound-toggle');
   const voices = new Map();   /* station id -> voice */
@@ -23,7 +23,10 @@ LP.audio = (() => {
     comp.threshold.value = -20; comp.knee.value = 22; comp.ratio.value = 5;
     master = ctx.createGain();
     master.gain.value = LP.clamp(Number(LP.store.get('vol', 85)) || 85, 0, 100) / 100;
-    master.connect(comp).connect(ctx.destination);
+    /* AGC: the receiver rides its own gain — a strong carrier pulls the
+       floor down fast, and the band swells back slowly when it lets go */
+    agc = ctx.createGain(); agc.gain.value = 1;
+    master.connect(agc).connect(comp).connect(ctx.destination);
 
     /* the noise floor: band hiss, shaped */
     const len = ctx.sampleRate * 2;
@@ -168,11 +171,8 @@ LP.audio = (() => {
       v.o = osc('sine', 1900);
       const sg = ctx.createGain(); sg.gain.value = 0.55;
       v.o.connect(sg).connect(g);
-      /* the line sync: 9 ms of 1200 Hz at the top of every scan line */
-      v.sync = osc('sine', 1200);
-      v.syncG = ctx.createGain(); v.syncG.gain.value = 0;
-      v.sync.connect(v.syncG).connect(g);
-      v.aux.push(sg, v.syncG);
+      v.aux.push(sg);
+      v._cycle = -1; /* Robot 36 scheduler state */
     } else if (st.type === 'crossing') {
       /* a grade-crossing bell heard across a long night: two warm tones
          through a lowpass, swinging back and forth, far away and small */
@@ -192,8 +192,8 @@ LP.audio = (() => {
       const fb = ctx.createGain(); fb.gain.value = 0.35;
       v.bus.connect(lp).connect(g);
       lp.connect(dl); dl.connect(fb); fb.connect(dl); dl.connect(g);
-      v.step = Math.floor(Date.now() / 320);
-      v.nextNote = ctx.currentTime + (320 - (Date.now() % 320)) / 1000;
+      v.step = Math.floor(LP.now() / 320);
+      v.nextNote = ctx.currentTime + (320 - (LP.now() % 320)) / 1000;
       v.scale = [0, 3, 5, 7, 10, 12, 15];
       v.aux.push(v.bus, lp, dl, fb);
     }
@@ -362,26 +362,53 @@ LP.audio = (() => {
         }
         if (ix === -1) v.lastTone = -1;
       } else if (st.type === 'sstv') {
-        const prog = st.prog(t);
-        if (prog >= 0 && LP.sstv) {
-          /* luma rides the standard SSTV video band: black 1500, white 2300 */
-          v.o.frequency.setTargetAtTime(1500 + LP.sstv.lumaAt(prog) * 800, now, 0.008);
-          v.g.gain.setTargetAtTime(vol * 0.14, now, K);
-          /* upcoming line syncs, scheduled ahead like everything else */
-          const lineMs = st.lineMs();
-          const m = t % st.PERIOD;
-          const sg = v.syncG.gain;
-          sg.cancelScheduledValues(now);
-          for (let nl = (Math.floor(m / lineMs) + 1) * lineMs; nl < m + 330 && nl < st.TX; nl += lineMs) {
-            const at = now + (nl - m) / 1000;
-            sg.setTargetAtTime(vol * 0.2, at, 0.002);
-            sg.setTargetAtTime(0, at + 0.009, 0.002);
+        const m = t % st.PERIOD;
+        if (m < st.TX && LP.sstv) {
+          v.g.gain.setTargetAtTime(vol * 0.15, now, K);
+          /* REAL Robot 36: VIS header, then per-line sync/porch/Y/chroma —
+             appended to the audio timeline ahead of the playhead, never
+             cancelled mid-frame. Point an SSTV app at the speaker. */
+          const cyc = Math.floor(t / st.PERIOD);
+          const fo = v.o.frequency;
+          if (v._cycle !== cyc) { v._cycle = cyc; fo.cancelScheduledValues(now); v._sched = m; }
+          if (v._sched < m + 5) v._sched = m + 5; /* never schedule behind the playhead */
+          const horizon = Math.min(m + 600, st.TX);
+          while (v._sched < horizon) {
+            if (v._sched < st.VIS) {
+              /* VIS for Robot 36 (code 8): leader, break, leader, start bit,
+                 7 data bits LSB-first + even parity, stop — 30 ms per bit */
+              const lead = st.VIS - 910;
+              if (v._sched < lead) { fo.setValueAtTime(1900, now + Math.max(0, v._sched - m) / 1000); v._sched = lead; continue; }
+              const seq = [[300, 1900], [10, 1200], [300, 1900], [30, 1200],
+                [30, 1300], [30, 1300], [30, 1300], [30, 1100], [30, 1300], [30, 1300], [30, 1300], [30, 1100],
+                [30, 1200]];
+              let o = lead;
+              for (const [dur, f] of seq) {
+                if (v._sched <= o) fo.setValueAtTime(f, now + (o - m) / 1000);
+                o += dur;
+              }
+              v._sched = st.VIS;
+              continue;
+            }
+            const line = Math.floor((v._sched - st.VIS) / st.LINE);
+            if (line >= st.H) { v._sched = st.TX; break; }
+            const cur = LP.sstv.lineCurves(line);
+            const lt = now + (st.VIS + line * st.LINE - m) / 1000;
+            if (cur && lt >= now) {
+              fo.setValueAtTime(1200, lt);                        /* sync, 9 ms */
+              fo.setValueAtTime(1500, lt + 0.009);                /* porch, 3 ms */
+              fo.setValueCurveAtTime(cur.y, lt + 0.012, 0.087);   /* Y scan, 88 ms */
+              fo.setValueAtTime(cur.even ? 1500 : 2300, lt + 0.100); /* separator */
+              fo.setValueAtTime(1900, lt + 0.1045);               /* porch */
+              fo.setValueCurveAtTime(cur.c, lt + 0.106, 0.0435);  /* chroma, 44 ms */
+            }
+            v._sched = st.VIS + (line + 1) * st.LINE;
           }
         } else {
           /* the CW ident between pictures */
+          if (v._cycle !== -1) { v._cycle = -1; v.o.frequency.cancelScheduledValues(now); }
           v.o.frequency.setTargetAtTime(740, now, 0.02);
           v.g.gain.setTargetAtTime(st.activity(t) * str * sel * 0.2, now, K);
-          if (v.syncG) v.syncG.gain.setTargetAtTime(0, now, 0.01);
         }
       } else if (st.type === 'pips') {
         /* fast keying constant: a 100 ms pip needs edges, not swells */
@@ -399,7 +426,7 @@ LP.audio = (() => {
         while (v.nextNote < now + 0.35) {
           const when = Math.max(v.nextNote, now + 0.02);
           const beat = 0.32;
-          const r = LP.mulberry((20260716 + new Date().getDate() * 977 + v.step) | 0);
+          const r = LP.mulberry((20260716 + LP.date().getDate() * 977 + v.step) | 0);
           const deg = v.scale[Math.floor(r() * v.scale.length)];
           if (v.step % 4 === 0) note(v.bus, 110 * Math.pow(2, (v.step % 8 === 0 ? 0 : 7) / 12), when, beat * 3.4, 'triangle', 0.16);
           if (r() < 0.82) note(v.bus, 440 * Math.pow(2, deg / 12), when, beat * (r() < 0.3 ? 1.9 : 0.95), 'sine', 0.14);
@@ -527,6 +554,10 @@ LP.audio = (() => {
       } else v._dieAt = 0;
     }
 
+    /* AGC ballistics: fast attack, slow release, like the front end it is */
+    const agcT = LP.clamp(1 / (0.45 + smeter * 1.5), 0.55, 1.6);
+    agc.gain.setTargetAtTime(agcT, now, agcT < agc.gain.value ? 0.06 : 0.9);
+
     /* noise floor swells when nothing is tuned; crashes follow the sky */
     noiseGain.gain.setTargetAtTime(0.028 + 0.05 * (1 - Math.min(1, smeter * 1.6)), now, 0.2);
     const sf = LP.band.sferic;
@@ -556,6 +587,7 @@ LP.audio = (() => {
   function roomSound(ev, dest, lvl) {
     const now = ctx.currentTime;
     const amp = LP.clamp(lvl, 0, 1);
+    const up = ev.newcomer ? 1.35 : 1; /* the new tenant's furniture sits higher */
     const dead = (n, tEnd) => { n.onended = () => { try { n.disconnect(); } catch { } }; };
     const thump = (at, f, a, d) => {
       const o = ctx.createOscillator(); o.type = 'sine';
@@ -569,7 +601,7 @@ LP.audio = (() => {
       o.start(at); o.stop(at + d + 0.05); dead(o);
     };
     if (ev.kind === 'thud') {
-      thump(now, 68, amp * 0.10, 0.28);
+      thump(now, 68 * up, amp * 0.10, 0.28);
     } else if (ev.kind === 'door') {
       thump(now, 75, amp * 0.08, 0.2);
       thump(now + 0.22, 62, amp * 0.10, 0.3);
@@ -578,8 +610,8 @@ LP.audio = (() => {
     } else if (ev.kind === 'chair') {
       /* wood under strain: a narrow-band squeal sliding down */
       const o = ctx.createOscillator(); o.type = 'sawtooth';
-      o.frequency.setValueAtTime(130, now);
-      o.frequency.exponentialRampToValueAtTime(72, now + 0.55);
+      o.frequency.setValueAtTime(130 * up, now);
+      o.frequency.exponentialRampToValueAtTime(72 * up, now + 0.55);
       const bp = ctx.createBiquadFilter();
       bp.type = 'bandpass'; bp.frequency.value = 340; bp.Q.value = 5;
       const g = ctx.createGain();
