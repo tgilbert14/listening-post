@@ -624,13 +624,13 @@ LP.band = (() => {
   /* Dozens of minor signals seeded fresh each day — weak CW ragchews,
      drifting carriers, splatter. Not loggable, never named: they exist so
      the named stations are discoveries in a crowd, not exhibits in a hall. */
-  const minors = (() => {
+  function buildMinors() {
     const list = [];
     const rnd = LP.mulberry(daySeed() * 31 + 7);
     const CALLS = 'KNWV';
     const L = () => String.fromCharCode(65 + Math.floor(rnd() * 26));
     const mkCall = () => CALLS[Math.floor(rnd() * 4)] + Math.floor(1 + rnd() * 9) + L() + L() + L();
-    for (let b = 0; b < 3; b++) {
+    for (let b = 0; b < BANDS.length; b++) {
       const B = BANDS[b];
       for (let i = 0; i < 24; i++) {
         let f = B.lo + 6 + rnd() * (B.hi - B.lo - 12);
@@ -662,7 +662,22 @@ LP.band = (() => {
       }
     }
     return list;
-  })();
+  }
+  /* the crowd is seeded fresh each day. A tab left open across local midnight
+     re-rolls it IN PLACE (the exported array reference must stay valid, since
+     the audio holds it), and the sleeper re-picks its carrier for the new
+     night. The named stations already re-seed themselves the same way. */
+  const minors = buildMinors();
+  let minorsDay = daySeed();
+  function reseedDay() {
+    const d = daySeed();
+    if (d === minorsDay) return;
+    minorsDay = d;
+    const fresh = buildMinors();
+    minors.length = 0;
+    for (const nm of fresh) minors.push(nm);
+    sleeper._day = -1; /* force the breathing carrier to be re-chosen */
+  }
   /* on the air in bursts: a seeded duty schedule, no two alike. The slot roll
      is cached — this runs for every minor on every raster row. */
   function minorActive(m, t) {
@@ -687,14 +702,16 @@ LP.band = (() => {
      Now and then it stops. Slightly too long. It is not on the station
      list. It is not loggable. It is not acknowledged, here or anywhere. */
   const sleeper = {
-    m: null, _tried: false,
+    m: null, _day: -1,
     night() { return LP.mulberry(daySeed() + 808)() < 0.13; },
     gain(m, t) {
-      if (!this._tried) {
-        this._tried = true;
+      const d = daySeed();
+      if (d !== this._day) {   /* a new night: re-pick (or clear) the breather */
+        this._day = d;
+        this.m = null;
         if (this.night()) {
           const carriers = minors.filter(x => x.kind === 'carrier');
-          if (carriers.length) this.m = carriers[Math.floor(LP.mulberry(daySeed() + 809)() * carriers.length)];
+          if (carriers.length) this.m = carriers[Math.floor(LP.mulberry(d + 809)() * carriers.length)];
         }
       }
       if (m !== this.m) return 1;
@@ -849,6 +866,7 @@ LP.band = (() => {
   /* one row: intensity 0..1 per column across [fLo..fHi] at time t */
   const sferic = { until: 0, level: 0, lastRoll: 0 };
   function spectrumRow(out, fLo, fHi, t, bandIx, rng) {
+    reseedDay(); /* roll the crowd over at local midnight for tabs left open */
     const cols = out.length;
     /* atmospheric noise falls WITH frequency, as it does on a real HF rig */
     const noiseBase = 0.079 - bandIx * 0.012;
@@ -927,21 +945,34 @@ LP.band = (() => {
       return;
     }
     if (st && st.type === 'jammer') {
-      /* a wall of hash: wideband, textured, unmusical */
+      /* a wall of hash: genuinely content-free, so the texture is honest
+         noise — but seeded per-slot from the MODEL (not the screen), so two
+         listeners see the same wall and it pulses with the jammer's own
+         swing rather than with the paint rate */
       const w = Math.max(2, sigma * 2);
-      for (let i = Math.max(0, Math.floor(center - w)); i < Math.min(cols, center + w); i++) {
-        out[i] += amp * (0.5 + 0.5 * Math.abs(Math.sin(i * 12.9898 + t / 35)));
-      }
+      const slot = Math.floor(t / 90);
+      const jr = LP.mulberry((slot * 2654435761) | 0);
+      const lo = Math.max(0, Math.floor(center - w)), hi = Math.min(cols, center + w);
+      for (let i = lo; i < hi; i++) out[i] += amp * (0.35 + 0.65 * jr());
       return;
     }
     if (st && st.type === 'music') {
+      /* AURORA's spectrum shows the NOTE it is playing this instant: the same
+         wall-clock step and seeded scale the audio schedules, so the bright
+         line in the band is the tone you hear, not a screen-space ripple */
       const w = Math.max(2, sigma * 2);
-      for (let i = Math.max(0, Math.floor(center - w)); i < Math.min(cols, center + w); i++) {
+      const step = Math.floor(t / 320);
+      const nr = LP.mulberry((20260716 + LP.date(t).getDate() * 977 + step) | 0);
+      const scale = [0, 3, 5, 7, 10, 12, 15];
+      const deg = scale[Math.floor(nr() * scale.length)];
+      const lo = Math.max(0, Math.floor(center - w)), hi = Math.min(cols, center + w);
+      for (let i = lo; i < hi; i++) {
         const x = (i - center) / w;
-        out[i] += amp * Math.max(0, 1 - x * x) * (0.35 + 0.4 * Math.abs(Math.sin(i * 0.9 + t / 140)));
+        out[i] += amp * Math.max(0, 1 - x * x) * 0.5;   /* the warm lowpassed band */
       }
-      /* carrier spike in the middle */
-      splat(out, center, 1, amp * 1.2);
+      splat(out, center, 1, amp * 1.2);                  /* the carrier */
+      /* the lead voice, placed by its scale degree within the audio band */
+      splat(out, center + (deg / 15 - 0.5) * 1.4 * w, Math.max(0.7, sigma * 0.3), amp * 0.9);
       return;
     }
     splat(out, center, sigma, amp);
@@ -990,6 +1021,6 @@ LP.band = (() => {
 /* the receiver state: one VFO, one band, one span (the width of the window
    the waterfall resolves). Arrival parks it a nudge below AURORA so the first
    drag of the dial tunes INTO the music. */
-LP.rx = { band: 1, vfo: 6779.0, span: 48, dwellT0: performance.now() };
+LP.rx = { band: 1, vfo: 6779.0, span: 48, sb: 'USB', dwellT0: performance.now() };
 LP.SPANS = [48, 24, 12];   /* wide to narrow: zoom in and the keying resolves */
 

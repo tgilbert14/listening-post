@@ -242,6 +242,25 @@
   if (zoomBtn) zoomBtn.addEventListener('click', () => { LP.cycleSpan(); reflectZoom(); });
   reflectZoom();
 
+  /* ---------- sideband: flip the BFO and the band's pitches turn over ---------- */
+  const sbBtn = document.getElementById('sb-toggle');
+  const savedSb = LP.store.get('sb', 'USB');
+  if (savedSb === 'USB' || savedSb === 'LSB') LP.rx.sb = savedSb;
+  function reflectSb() {
+    if (!sbBtn) return;
+    sbBtn.textContent = LP.rx.sb;
+    sbBtn.setAttribute('aria-label', `Sideband: ${LP.rx.sb === 'USB' ? 'upper' : 'lower'}. Press to switch.`);
+  }
+  function toggleSb() {
+    LP.rx.sb = LP.rx.sb === 'USB' ? 'LSB' : 'USB';
+    LP.store.set('sb', LP.rx.sb);
+    reflectSb();
+    LP.say(`${LP.rx.sb === 'USB' ? 'Upper' : 'Lower'} sideband.`);
+  }
+  LP.toggleSb = toggleSb;
+  if (sbBtn) sbBtn.addEventListener('click', toggleSb);
+  reflectSb();
+
   /* ---------- the operator's card: docked, never a wall ---------- */
   const cardBtn = document.getElementById('card-toggle');
   const card = document.getElementById('opcard');
@@ -269,6 +288,7 @@
      whatever chip is focused. */
   addEventListener('keydown', (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey) return; /* never hijack a chord */
+    if (e.isComposing || e.keyCode === 229) return; /* mid-IME composition is not a shortcut (WCAG 2.1.4) */
     if (e.key === 'Escape' && !card.hidden) { showCard(false); return; }
     if (e.key === 'Escape' && !document.getElementById('logbook').hidden) { toggleLog(false); return; }
     const el = e.target instanceof HTMLElement ? e.target : null;
@@ -290,6 +310,7 @@
       case '3': setBand(2); break;
       case 'z': case 'Z': LP.cycleSpan(); break;
       case 'l': case 'L': toggleLog(); break;
+      case 's': case 'S': toggleSb(); break;
       default: return;
     }
     e.preventDefault();

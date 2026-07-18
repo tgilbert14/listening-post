@@ -230,6 +230,18 @@ LP.audio = (() => {
     try { v.g.disconnect(); } catch { }
   }
 
+  /* schedule a keyed gain envelope: the level NOW, then every keying edge in
+     the lookahead window pre-placed on the audio clock, so a stalled frame can
+     never smear a dit into a stuck carrier. ONE copy — the beacons, THE
+     CONSTANT, the net unison, and the underbrush ragchews all key through it. */
+  function scheduleKeying(gain, edges, lvl, now, t, onNow, tc) {
+    gain.cancelScheduledValues(now);
+    gain.setTargetAtTime(onNow ? lvl : 0, now, tc || 0.012);
+    for (const e of edges) {
+      gain.setTargetAtTime(e.on ? lvl : 0, now + Math.max(0.001, (e.t - t) / 1000), 0.008);
+    }
+  }
+
   /* the S-meter reads the MODEL, not the audio path: it works with sound
      off, opted out, or before the first gesture */
   function meterScan(t) {
@@ -258,6 +270,10 @@ LP.audio = (() => {
     const rx = LP.rx;
     const now = ctx.currentTime;
     const K = 0.012; /* keying time-constant */
+    /* the BFO with a sideband: off = vfo - f, so a signal ABOVE the dial has
+       off < 0. On USB that beats high; LSB turns every pitch over. */
+    const sbDir = LP.rx.sb === 'LSB' ? -1 : 1;
+    const bfo = (o) => -o * sbDir * 1000;
 
     /* which stations are within earshot (±5 kHz) */
     const near = new Set();
@@ -276,35 +292,24 @@ LP.audio = (() => {
       if (v.pan) v.pan.pan.setTargetAtTime(LP.clamp((st.f - rx.vfo) / 3.5, -0.75, 0.75), now, 0.08);
 
       if (st.type === 'beacon') {
-        /* CW against the BFO: pitch IS your tuning error (1 kHz off = 1 kHz beat,
-           floored at 300 Hz so zero-beat stays musical) */
-        const pitch = LP.clamp(300 + Math.abs(off) * 1000 + (st.pitchBias || 0), 220, 1900);
+        /* CW against the BFO: pitch IS your tuning error, and now it has a
+           SIDE — on USB a signal above the dial beats high and below beats
+           low; LSB inverts it. Flip the sideband and the whole band's pitches
+           turn over, exactly as on a real set. */
+        const pitch = LP.clamp(300 + bfo(off) + (st.pitchBias || 0), 120, 1900);
         v.o.frequency.setTargetAtTime(pitch, now, 0.03);
-        /* keying is SCHEDULED 330ms ahead on the audio clock: a stalled frame
-           can no longer smear a dit into a stuck carrier */
-        const lvl = str * sel * 0.30;
-        const gg = v.g.gain;
-        gg.cancelScheduledValues(now);
-        gg.setTargetAtTime(st.activity(t) > 0 ? lvl : 0, now, K);
-        for (const e of LP.band.keyEdges(st, t, t + 330)) {
-          gg.setTargetAtTime(e.on ? lvl : 0, now + Math.max(0.001, (e.t - t) / 1000), 0.008);
-        }
+        /* keying is SCHEDULED 330ms ahead on the audio clock */
+        scheduleKeying(v.g.gain, LP.band.keyEdges(st, t, t + 330), str * sel * 0.30, now, t, st.activity(t) > 0, K);
       } else if (st.type === 'constant') {
         /* while the tenant is present it does not obey the BFO: the same
            pitch at every tuning error (it never arrived as radio), and a
            dead-center stereo image (it is not coming from a direction).
            Afterward: an ordinary beacon, at last. */
         const here = LP.band.present();
-        const pitch = here ? 470 : LP.clamp(300 + Math.abs(off) * 1000, 220, 1900);
+        const pitch = here ? 470 : LP.clamp(300 + bfo(off), 120, 1900);
         v.o.frequency.setTargetAtTime(pitch, now, 0.03);
         if (v.pan) v.pan.pan.setTargetAtTime(here ? 0 : LP.clamp((st.f - rx.vfo) / 3.5, -0.75, 0.75), now, 0.08);
-        const lvl = str * sel * 0.30;
-        const gg = v.g.gain;
-        gg.cancelScheduledValues(now);
-        gg.setTargetAtTime(st.activity(t) > 0 ? lvl : 0, now, K);
-        for (const e of LP.band.keyEdges(st, t, t + 330)) {
-          gg.setTargetAtTime(e.on ? lvl : 0, now + Math.max(0.001, (e.t - t) / 1000), 0.008);
-        }
+        scheduleKeying(v.g.gain, LP.band.keyEdges(st, t, t + 330), str * sel * 0.30, now, t, st.activity(t) > 0, K);
       } else if (st.type === 'buzzer') {
         const p = st.phase(t);
         v.g.gain.setTargetAtTime(str * sel * 0.26, now, K);
@@ -454,13 +459,7 @@ LP.audio = (() => {
          the same moment — each in its own timbre, all in one rhythm. The
          beacon paths above already schedule it; this covers the rest. */
       if (LP.band.netActive(t) && st.type !== 'beacon' && st.type !== 'constant' && st.type !== 'jammer') {
-        const lvl = str * sel * 0.28;
-        const gg = v.g.gain;
-        gg.cancelScheduledValues(now);
-        gg.setTargetAtTime(st.activity(t) > 0 ? lvl : 0, now, 0.008);
-        for (const e of LP.band.keyEdges(st, t, t + 330)) {
-          gg.setTargetAtTime(e.on ? lvl : 0, now + Math.max(0.001, (e.t - t) / 1000), 0.008);
-        }
+        scheduleKeying(v.g.gain, LP.band.keyEdges(st, t, t + 330), str * sel * 0.28, now, t, st.activity(t) > 0, 0.008);
       }
     }
 
@@ -484,17 +483,9 @@ LP.audio = (() => {
       } else if (m.kind === 'splatter') {
         v.o.frequency.setTargetAtTime(140 + Math.abs(off) * 260, now, 0.05);
         v.g.gain.setTargetAtTime(str * sel * 0.05, now, K);
-      } else { /* cw */
-        /* the ragchews get the same lookahead keying the beacons earned:
-           a stalled frame can't smear a stranger's dit either */
-        v.o.frequency.setTargetAtTime(LP.clamp(300 + Math.abs(off) * 1000, 220, 1700), now, 0.03);
-        const lvl = str * sel * 0.16;
-        const gg = v.g.gain;
-        gg.cancelScheduledValues(now);
-        gg.setTargetAtTime(LP.band.morseOn(m._m, t) ? lvl : 0, now, K);
-        for (const e of LP.band.keyEdges(m, t, t + 330, true)) {
-          gg.setTargetAtTime(e.on ? lvl : 0, now + Math.max(0.001, (e.t - t) / 1000), 0.008);
-        }
+      } else { /* cw — a ragchew keeps the sideband sense too */
+        v.o.frequency.setTargetAtTime(LP.clamp(300 + bfo(off), 120, 1700), now, 0.03);
+        scheduleKeying(v.g.gain, LP.band.keyEdges(m, t, t + 330, true), str * sel * 0.16, now, t, LP.band.morseOn(m._m, t), K);
       }
     }
 
@@ -530,7 +521,7 @@ LP.audio = (() => {
         if (!v) { v = mkVoice({ type: 'echo', id: 'THE ECHO' }); voices.set('THE ECHO', v); }
         if (v.pan) v.pan.pan.setTargetAtTime(LP.clamp((ef - rx.vfo) / 3.5, -0.75, 0.75), now, 0.08);
         /* the same beat law as any carrier, shaded 40 Hz flat — a memory */
-        v.o.frequency.setTargetAtTime(LP.clamp(300 + eoff * 1000, 220, 1900) - 40, now, 0.03);
+        v.o.frequency.setTargetAtTime(LP.clamp(300 + bfo(rx.vfo - ef), 120, 1900) - 40, now, 0.03);
         const esel = Math.exp(-(eoff * eoff) / (2 * 0.42 * 0.42));
         v.g.gain.setTargetAtTime(lde.activity(t) * esel * 0.07, now, K);
       }

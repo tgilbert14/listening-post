@@ -7,7 +7,9 @@ An interactive showcase by [Desert Data Labs](https://desertdatalabs.com): a sho
 rendered entirely in procedural canvas and WebAudio — no frameworks, no images, no audio files.
 One model is the single source of truth: the waterfall paints it and the audio engine sounds it,
 so what you see is exactly what you hear. CW beats against the BFO, which means the pitch of a
-beacon **is** your tuning error. Signals fade on slow ionospheric cycles that carry real space
+beacon **is** your tuning error — and it has a **side**: on USB a signal above the dial beats
+high and below beats low; switch to LSB and every pitch on the band turns over. Signals fade on
+slow ionospheric cycles that carry real space
 weather — a daily geomagnetic index, dayside flares, sporadic-E openings. Lightning crashes are
 broadband on the glass and in your ears at the same moment. The set rides its own **AGC**, so a
 strong carrier pulls the floor down and the band swells back when it lets go.
@@ -69,6 +71,7 @@ is remembered.
 | Tune | drag the glass or the dial strip; wheel for fine work; fling the dial to coast | arrows (±0.1 / ±1), PgUp/PgDn (±5), Home/End |
 | Jump across the band | tap the ribbon at the top of the glass | — |
 | Zoom the window | 48/24/12 kHz chip | `Z` |
+| Sideband (flips the CW pitch sense) | USB/LSB chip | `S` |
 | Change band | GROUND / SKY / HIGH chips | `1` `2` `3` |
 | Station log (retune / export from it) | LOG chip | `L` |
 | Sound on/off · volume | SOUND chip · volume slider | — |

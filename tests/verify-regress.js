@@ -104,6 +104,51 @@ const check = (name, ok, detail = '') => {
   });
   check('THE JAMMER model does not key the net', jam.modelSilent);
 
+  // ---- sideband: flipping USB/LSB turns the CW pitch slope over ----
+  const sb = await page.evaluate(() => {
+    // reproduce the audio's bfo law for a beacon above the dial
+    const st = LP.band.stations.find((s) => s.type === 'beacon');
+    const probe = (mode) => {
+      LP.rx.sb = mode;
+      const off = LP.rx.vfo - st.f;              // tune 1 kHz below the beacon
+      const dir = LP.rx.sb === 'LSB' ? -1 : 1;
+      return LP.clamp(300 + (-off * dir * 1000), 120, 1900);
+    };
+    LP.tuneTo(st.f - 1, true);
+    const usb = probe('USB'), lsb = probe('LSB');
+    LP.rx.sb = 'USB';
+    return { usb, lsb };
+  });
+  check('sideband inverts the CW pitch sense (USB high vs LSB low for a signal above)',
+    sb.usb > 900 && sb.lsb < 300, `USB=${sb.usb.toFixed(0)}Hz LSB=${sb.lsb.toFixed(0)}Hz`);
+  const sbUi = await page.evaluate(() => {
+    const btn = document.getElementById('sb-toggle');
+    const was = btn.textContent;
+    btn.click();
+    const now = btn.textContent;
+    const stored = localStorage.getItem('lp-sb');
+    btn.click(); // restore
+    return { was, now, stored: stored ? JSON.parse(stored) : null };
+  });
+  check('the sideband chip toggles and persists', sbUi.was === 'USB' && sbUi.now === 'LSB' && sbUi.stored === 'LSB', JSON.stringify(sbUi));
+
+  // ---- midnight reseed: the underbrush re-rolls in place across a day boundary ----
+  const reseed = await page.evaluate(() => {
+    const arrRef = LP.band.minors;                 // the exported reference audio holds
+    const before = arrRef.map((m) => m.f).join(',');
+    // warp the clock a full day forward and force a spectrum render (calls reseedDay)
+    LP.warp = 26 * 3600 * 1000;
+    const out = new Float32Array(512);
+    LP.band.spectrumRow(out, 3200, 3440, LP.now(), 0, LP.mulberry(1));
+    const sameRef = LP.band.minors === arrRef;     // must mutate in place, not replace
+    const after = LP.band.minors.map((m) => m.f).join(',');
+    LP.warp = 0;
+    LP.band.spectrumRow(out, 3200, 3440, LP.now(), 0, LP.mulberry(1));
+    return { sameRef, changed: before !== after, count: LP.band.minors.length };
+  });
+  check('underbrush re-rolls at midnight, in place (same array reference)',
+    reseed.sameRef && reseed.changed && reseed.count > 0, JSON.stringify(reseed));
+
   // the ticker test deliberately throws one 'synthetic' error, which the loop
   // now correctly logs instead of dying on — exclude only that expected line
   const unexpected = errs.filter((e) => !/synthetic/.test(e));
