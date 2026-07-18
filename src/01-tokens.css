@@ -1,14 +1,14 @@
 /* THE LISTENING POST — tokens. A radio room at 3 AM: near-black chassis,
    phosphor green display glass, one amber pilot-lamp accent, pencil grey. */
 :root {
-  --void: #050807;           /* the room */
-  --chassis: #101413;        /* receiver metal */
-  --chassis-2: #181d1b;      /* raised panel */
-  --phos: #6fdd8b;           /* phosphor trace */
-  --phos-dim: #2e5c3c;       /* phosphor afterglow — decoration only */
-  --phos-text: #55a86e;      /* phosphor at reading contrast (4.6:1 on the void) */
-  --phos-bright: #c9ffd4;    /* saturated peak */
-  --amber: #d9a441;          /* pilot lamp / tuned lock */
+  --void: #010504;           /* the room */
+  --chassis: #07100e;        /* receiver metal */
+  --chassis-2: #0b1513;      /* raised panel */
+  --phos: #68ad9d;           /* codec phosphor */
+  --phos-dim: #28564e;       /* phosphor afterglow — decoration only */
+  --phos-text: #5b9b8d;      /* phosphor at reading contrast */
+  --phos-bright: #b8ddd4;    /* saturated peak */
+  --amber: #92a882;          /* tuned lock */
   --pencil: #9aa39c;         /* engraved + pencil entries */
   --pencil-dim: #5c655e;     /* decoration only */
   --pencil-text: #838d85;    /* dim engraving that still reads (4.5:1) */

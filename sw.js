@@ -1,7 +1,7 @@
-/* THE LISTENING POST — service worker. One page, no assets: cache it, serve
+/* THE LISTENING POST — service worker. Cache the receiver and comms portraits, serve
    it, refresh it in the background. The receiver works with the wire cut. */
-const CACHE = 'listening-post-v1';
-const PAGES = ['./', './index.html', './manifest.webmanifest'];
+const CACHE = 'listening-post-v4';
+const PAGES = ['./', './index.html', './manifest.webmanifest', './operator-comms.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(PAGES)).then(() => self.skipWaiting()));
