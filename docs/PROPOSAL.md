@@ -19,8 +19,11 @@
 > **Re-grade ✅ done** — the panel re-scored the finished app (7.0 as-graded; Content
 > 8.5, DSP & Architecture +1.0) and caught three HIGH regressions, all since fixed.
 > See [`EVALUATION-AFTER.md`](./EVALUATION-AFTER.md).
-> *Deferred: WEFAX, sideband select, station-type registry refactor, model-driven
-> waterfall texture, midnight population re-seed, single-char shortcut remap, phone reflow.*
+> **Shelf cleared** — WEFAX (a 120-lpm synoptic weather chart), selectable sideband
+> (USB/LSB), model-driven waterfall texture (music/jammer), midnight population
+> re-seed, single-char shortcut hardening, phone reflow, and a keying-scheduler
+> dedup all shipped. Only a full station-type registry rewrite remains intentionally
+> deferred (high regression risk on a working, tested engine for internal gain).
 
 *The maximal upgrade plan. Built directly on the confirmed findings in
 [`EVALUATION.md`](./EVALUATION.md): every defect becomes a fix, every fix becomes a

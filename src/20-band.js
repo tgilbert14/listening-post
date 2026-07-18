@@ -494,6 +494,32 @@ LP.band = (() => {
     },
   });
 
+  /* WEFAX: HF radiofax, the weather drawn slowly. 120 lines/minute, FM with
+     black at 1500 Hz and white at 2300 — a synoptic analysis chart whose
+     pressure systems track the day's real space weather (a storm draws a
+     deeper low). A finished chart pins to the log beside the postcards. */
+  S.push({
+    id: 'WEFAX', name: 'WEFAX', f: 9410.0, band: 2, type: 'wefax', bw: 1.9,
+    note: 'the weather, drawn slowly',
+    _m: compileMorse('RYRY DE WX WX ANALYSIS', 16, 3000),
+    PERIOD: 480000, H: 240, START: 5000, LPM: 120,
+    get LINE() { return 60000 / this.LPM; },            /* 500 ms/line */
+    get TX() { return this.START + this.H * this.LINE; },
+    prog(t) {
+      const m = t % this.PERIOD;
+      if (m >= this.TX) return -1;
+      return m < this.START ? 0 : (m - this.START) / (this.H * this.LINE);
+    },
+    lineMs() { return this.LINE; },
+    activity(t) {
+      if (netActive(t)) return morseOn(net.m, t - net.t0) ? 1 : 0;
+      const m = t % this.PERIOD;
+      if (m < this.TX) return 1;
+      if (m > this.TX + 6000 && m < this.TX + 34000) return morseOn(this._m, m - this.TX - 6000) ? 1 : 0;
+      return 0;
+    },
+  });
+
   /* ---------- THE CROSSING: some nights, a bell far away ---------- */
   /* A rare visitor (about one night in four, seeded by the date): a faint
      two-tone crossing bell drifting over 6660. Hearing it at all is the event. */
@@ -942,6 +968,18 @@ LP.band = (() => {
       /* the live scanning tone: black 1500 Hz at the low edge, white 2300 at
          the high edge — the sub-carrier the sound is sweeping this instant */
       splat(out, center + (luma - 0.5) * 2 * w * 0.72, Math.max(0.7, sigma * 0.22), amp * 1.15);
+      return;
+    }
+    if (st && st.type === 'wefax') {
+      /* the fax is one FM tone: a faint band with a bright line riding where
+         the ink is this instant (2300 white at the high edge → 1500 ink low),
+         from the same table the audio sends */
+      const prog = st.prog ? st.prog(t) : -1;
+      const inkv = (prog >= 0 && LP.wefax && LP.wefax.lineAt) ? LP.wefax.lineAt(prog) : 0.1;
+      const w = Math.max(2, sigma * 2);
+      const lo = Math.max(0, Math.floor(center - w)), hi = Math.min(cols, center + w);
+      for (let i = lo; i < hi; i++) out[i] += amp * 0.28 * Math.max(0, 1 - Math.abs((i - center) / w));
+      splat(out, center + (0.5 - inkv) * 2 * w * 0.72, Math.max(0.7, sigma * 0.22), amp * 1.1);
       return;
     }
     if (st && st.type === 'jammer') {

@@ -30,6 +30,10 @@ empty hall. The traffic runs on the wall clock whether anyone is listening or no
   lines of sync, luma, and chroma, every six minutes. Point a phone running an SSTV decoder at
   the speaker and see what develops. Tune it badly and the picture pays for it. Sit with one to
   the end and the finished card is **pinned into your log** as a keepsake
+- **WEFAX** — HF radiofax at 120 lines/minute: a procedurally-drawn synoptic weather chart —
+  coastline, isobars, pressure centres, fronts — whose systems track the day's real space
+  weather (a storm draws a deeper low). Sit with one to the end and the finished chart pins to
+  your log beside the postcards
 - **HOMECOMING** — eleven tones, only transmitted after dark, your local dark
 - **THE CROSSING** — some nights, a bell far away over 6660. About one night in four, seeded by
   the date. Hearing it at all is the event
@@ -93,7 +97,7 @@ node tests/verify-regress.js  # the live paths static checks miss (SSTV schedule
 ```
 
 Fragments concatenate in order: tokens → shell → body → boot → band → audio → waterfall →
-sstv → interact → log → arrival. The build fails loudly if any `__PLACEHOLDER__` survives.
+sstv → wefax → interact → log → arrival. The build fails loudly if any `__PLACEHOLDER__` survives.
 CI (`.github/workflows/verify.yml`) rebuilds, fails on any drift from the committed `index.html`,
 and gates on all five suites. See [`tests/README.md`](tests/README.md).
 

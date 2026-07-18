@@ -175,6 +175,12 @@ LP.audio = (() => {
       v.o.connect(sg).connect(g);
       v.aux.push(sg);
       v._cycle = -1; /* Robot 36 scheduler state */
+    } else if (st.type === 'wefax') {
+      /* HF fax: one FM tone, white paper 2300 Hz down to black ink 1500 */
+      v.o = osc('sine', 2300);
+      const sg = ctx.createGain(); sg.gain.value = 0.5;
+      v.o.connect(sg).connect(g);
+      v.aux.push(sg);
     } else if (st.type === 'crossing') {
       /* a grade-crossing bell heard across a long night: two warm tones
          through a lowpass, swinging back and forth, far away and small */
@@ -429,6 +435,20 @@ LP.audio = (() => {
           if (v._cycle !== -1) { v._cycle = -1; v.o.frequency.cancelScheduledValues(now); }
           v.o.frequency.setTargetAtTime(740, now, 0.02);
           v.g.gain.setTargetAtTime(st.activity(t) * str * sel * 0.2, now, K);
+        }
+      } else if (st.type === 'wefax') {
+        /* the fax whine: the tone rides the ink under the drum right now —
+           mostly high (white paper), dipping to 1500 on a black line. The
+           same ink table LP.wefax paints, so the sound IS the chart. */
+        const m = t % st.PERIOD;
+        if (m < st.TX && LP.wefax) {
+          v.g.gain.setTargetAtTime(vol * 0.12, now, K);
+          const prog = st.prog(t);
+          if (m < st.START || prog < 0) v.o.frequency.setTargetAtTime(2300, now, 0.02); /* the white phasing bar */
+          else v.o.frequency.setTargetAtTime(2300 - LP.wefax.lineAt(prog) * 800, now, 0.006);
+        } else {
+          v.o.frequency.setTargetAtTime(700, now, 0.02); /* the CW ident between charts */
+          v.g.gain.setTargetAtTime(st.activity(t) * str * sel * 0.18, now, K);
         }
       } else if (st.type === 'pips') {
         /* fast keying constant: a 100 ms pip needs edges, not swells */

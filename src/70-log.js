@@ -25,7 +25,7 @@ LP.log = (() => {
   const seen = new Set(entries.map(e => e.id));
   let netDone = LP.store.get('net', false);
   let lockedOn = null, lockT0 = 0, lastActive = 0, prevLock = null;
-  let pendingPic = null;   /* a postcard that finished before its line existed */
+  const pendingPic = {};   /* pictures that finished before their line existed, by id */
 
   function has(id) { return seen.has(id); }
   const bandName = () => LP.band.BANDS[LP.rx.band].name;
@@ -62,7 +62,7 @@ LP.log = (() => {
       date: `${d.getUTCFullYear()}${pad2(d.getUTCMonth() + 1)}${pad2(d.getUTCDate())}`,
     };
     if (navigator.vibrate) navigator.vibrate(12); /* the pencil lands */
-    if (pendingPic && id === 'POSTCARD') { e.pic = pendingPic.url; if (pendingPic.caption) e.note = pendingPic.caption; pendingPic = null; }
+    if (pendingPic[id]) { e.pic = pendingPic[id].url; if (pendingPic[id].caption) e.note = pendingPic[id].caption; delete pendingPic[id]; }
     entries.push(e);
     store();
     LP.say(`Logged: ${id}${f ? ', ' + f.toFixed(1) + ' kilohertz' : ''}${report ? ', report ' + report.split('').join(' ') : ''}.`);
@@ -70,12 +70,12 @@ LP.log = (() => {
     maybeNet();
   }
 
-  /* pin the finished postcard to its line — your keepsake is the last picture
-     you sat with long enough to receive whole */
-  function attachPicture(url, caption) {
-    const e = entries.find(x => x.id === 'POSTCARD');
+  /* pin a finished picture to its line — the last postcard OR weather chart
+     you sat with long enough to receive whole. Keyed by station id. */
+  function attachPicture(url, caption, id = 'POSTCARD') {
+    const e = entries.find(x => x.id === id);
     if (e) { e.pic = url; if (caption) e.note = caption; store(); render(); }
-    else pendingPic = { url, caption };  /* the line will get it when it's logged */
+    else pendingPic[id] = { url, caption };  /* the line will get it when it's logged */
   }
 
   function render() {

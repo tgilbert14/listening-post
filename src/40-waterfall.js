@@ -245,13 +245,15 @@ LP.display = (() => {
       return;
     } else if (lock) {
       const st = LP.band.stations.find(s => s.id === lock);
-      if (st && st.type === 'sstv') {
+      if (st && (st.type === 'sstv' || st.type === 'wefax')) {
         /* the picture is not morse: while it paints, the masthead says so,
            and during the ident it decodes IN PHASE with the keying */
         const prog = st.prog(t);
-        if (prog >= 0) { subEl.textContent = `PICTURE ${Math.floor(prog * 100)}%`; decoding = true; return; }
-        const identT = (t % st.PERIOD) - st.TX - 8000;
-        subEl.textContent = (identT > 0 && identT < 32000)
+        const label = st.type === 'wefax' ? 'CHART' : 'PICTURE';
+        if (prog >= 0) { subEl.textContent = `${label} ${Math.floor(prog * 100)}%`; decoding = true; return; }
+        const identGap = st.type === 'wefax' ? 6000 : 8000;
+        const identT = (t % st.PERIOD) - st.TX - identGap;
+        subEl.textContent = (identT > 0 && identT < 30000)
           ? (LP.band.decodeMorse(st._m, identT % st._m.total).slice(-44) || '·') : '·';
         decoding = true;
         return;
@@ -341,6 +343,7 @@ LP.display = (() => {
 
     LP.audio.update(t);
     if (LP.sstv) LP.sstv.update(t);
+    if (LP.wefax) LP.wefax.update(t);
     if (LP.log) LP.log.check(t);
 
     /* the glass repaints only when its content did (the raster is 30 Hz,
