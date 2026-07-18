@@ -7,6 +7,9 @@ const check = (name, ok, detail = '') => {
   if (!ok) fails++;
 };
 const openReceiverForTest = async (page) => {
+  // Give Chrome a real user activation before any receiver path may create or
+  // resume an AudioContext, while keeping campaign calls out of this unit test.
+  await page.click('#title-screen');
   await page.evaluate(() => {
     const cover = document.getElementById('title-screen');
     if (cover) cover.hidden = true;
@@ -24,6 +27,7 @@ const openReceiverForTest = async (page) => {
   page.on('pageerror', (e) => logs.push(`[PAGEERROR] ${e.message}`));
   await page.goto(URL);
   await page.waitForTimeout(3000);
+  await page.click('#title-screen');
 
   // ---- 1. The cipher: decode the day's groups back to the sentence ----
   const cipher = await page.evaluate(() => {
