@@ -157,6 +157,87 @@ is the app's superpower — spend it.*
 
 ---
 
+## Phase 2½ — THE FAR FIELD
+*The horror deepening. Cosmic-industrial dread — the patient, biological, wrongly-
+quiet kind — delivered entirely through the receiver. In antenna theory the far
+field is the region where the wave has detached from whatever made it and travels
+on its own. That is the register: signals whose senders are no longer the point.*
+
+**The design law (before any feature):** the horror is only allowed to arrive the
+way everything else on this band arrives — modeled, wall-clock-seeded, rare,
+shared, unannounced, and *deniable*. Every event must leave the listener a mundane
+explanation they can almost believe. No lore text, no names from any franchise, no
+jump scares, no screams. Dread through implication; the moment the app confirms
+the horror, the horror dies. And like everything else here: all of it ends.
+
+The bridge that keeps the fiction honest is that shortwave already has its own
+cosmic-horror canon — **real, documented, unexplained radio phenomena**. We
+implement those, played straight:
+
+1. **THE WARNING.** A distress beacon on the far edge of HIGH — automated,
+   repeating, slowly degrading, keying what any operator would read as a mayday
+   with coordinates. It logs that way too. But the cycle is long, and once per
+   hour it keys one additional group the short-stay listener never hears — and the
+   full message, assembled by someone patient, is not a request for help. It is
+   telling you not to come. (The oldest trick in cosmic horror: the signal you
+   misread until you've already answered. Implementation: one long compiled-morse
+   cycle whose tail group inverts the reading; the log entry quietly gains a
+   second line if you were on frequency for the tail.)
+
+2. **LONG DELAY.** Long-delayed echoes — the real LDE phenomenon, reported since
+   1927 and never fully explained. On rare seeded nights, a station you just left
+   repeats its last few seconds *behind* you: same keying, 8–40 seconds late, a
+   few hundred hertz low, weaker, as if the band remembered it. Implementation is
+   pure model: replay the same compiled spans at an offset frequency with a delay
+   — one function, no new assets. Deniability is built into the phenomenon
+   itself; even the 1920s engineers argued about what it was.
+
+3. **THE SLEEPER.** One unnamed carrier in the underbrush, on rare seeded nights,
+   carries amplitude modulation at twelve cycles per minute — the rate of a large
+   animal breathing at rest. It is not on the station list. It is not loggable.
+   Occasionally the breathing pauses — slightly too long — and resumes. Nothing
+   about it is ever acknowledged anywhere. (Slow AM envelope on an existing minor;
+   fifteen lines of code; the single most Alien-shaped object on the band.)
+
+4. **THE PIPS FAIL.** Once THE PIPS exist (Phase 2), clock horror becomes
+   available: on one seeded night a year, a pip is missing. Two minutes later,
+   another. The failures spell something in their spacing, for anyone keeping
+   time. A time station losing time is the industrial equivalent of a heartbeat
+   skipping — the most primal wrongness the fiction can afford without a single
+   new sound.
+
+5. **HULL NOISE.** The room-behind-the-buzzer system, generalized: on geomagnetic
+   storm nights (Phase 1's ionosphere), very low, behind THE FORECAST — long
+   metallic groans, strain without source, the sound of an enormous structure
+   settling. In-fiction it is the antenna farm in the wind. In the ear it is a
+   hull. The ambiguity *is* the feature. (Reuses `roomEvent`'s scheduler with a
+   new synth voice; the storm gating means two listeners can corroborate.)
+
+6. **THE DUET.** Post-departure only — the elegy's dark twin. Hold zero-beat on a
+   quiet frequency long enough and, very rarely, a second heterodyne rises a few
+   cents from your beat pitch: a slow, physical binaural throb that stops the
+   instant you move the dial. It never asks anything. It has no callsign. Where
+   THE OTHER wanted to know who was there, whatever this is already knows — it is
+   just *matching you*. (A second oscillator at `beatPitch ± 3 cents`; the
+   detune, not the volume, is the horror.)
+
+7. **ONE ROW EARLY.** The single permitted lie. On LDE nights only, once: the
+   waterfall paints a signal's keying one raster row *before* the audio sounds
+   it. The app's foundational law — what you see is exactly what you hear — is
+   broken by exactly one row, exactly once, on nights the band is already
+   echoing. The one rule this app never breaks, breaking, is the strongest
+   sentence it can say. (Implementation: the raster's row clock leads the audio
+   clock by one row-period for a single seeded window; a comment in the source
+   marks it as the only sanctioned violation of the house rule.)
+
+**Escalation across the arc:** these do not all run at once. LONG DELAY and THE
+SLEEPER are ambient-rare from the start; THE WARNING is findable by anyone
+patient; THE PIPS FAIL and HULL NOISE ride Phase 1–2 systems; THE DUET and ONE
+ROW EARLY unlock only after the departure — the band does not get safer once the
+ghost is gone. It gets quieter. Then it gets *attentive*.
+
+---
+
 ## Phase 3 — MAKE IT YOURS
 *The listener gets keepsakes, tools, and a bedside radio.*
 
@@ -208,6 +289,7 @@ is the app's superpower — spend it.*
 | 0 — Make it true | ~2–4 days | B → A−: every claim honest, worst bug dead |
 | 1 — Make it deep | ~1–2 weeks | The "real software decodes it" reviews |
 | 2 — Make it alive | ~1–2 weeks | Return visits, community folklore |
+| 2½ — The Far Field | ~1 week | The dread the marketing copy already promises |
 | 3 — Make it yours | ~1 week | Install base, shareable artifacts |
 | 4 — Make it bulletproof | ~3–5 days | Permanent floor under quality |
 

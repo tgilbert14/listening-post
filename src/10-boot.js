@@ -13,14 +13,16 @@ LP.DPR = () => Math.min(devicePixelRatio || 1, 2);
 
 LP.ticker = (() => {
   const tasks = new Set();
-  let rafId = null, last = 0;
+  let rafId = null, last = 0, inFrame = false;
   function frame(now) {
     rafId = null;
+    inFrame = true; /* a kick() from inside a task must not double-schedule the loop */
     const dt = Math.min(50, now - last) || 16; last = now;
     for (const t of tasks) { if (t(dt, now) === false) tasks.delete(t); } /* Set tolerates delete-during-iteration */
-    if (tasks.size && !document.hidden) rafId = requestAnimationFrame(frame);
+    inFrame = false;
+    if (rafId === null && tasks.size && !document.hidden) rafId = requestAnimationFrame(frame);
   }
-  function kick() { if (rafId === null && tasks.size && !document.hidden) { last = performance.now(); rafId = requestAnimationFrame(frame); } }
+  function kick() { if (!inFrame && rafId === null && tasks.size && !document.hidden) { last = performance.now(); rafId = requestAnimationFrame(frame); } }
   document.addEventListener('visibilitychange', () => { if (!document.hidden) kick(); });
   return { add(t) { tasks.add(t); kick(); return () => tasks.delete(t); }, kick };
 })();
@@ -28,6 +30,10 @@ LP.ticker = (() => {
 LP.TAU = Math.PI * 2;
 LP.clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 LP.lerp = (a, b, t) => a + (b - a) * t;
+
+/* the receiver's passband: how much of a signal at offset `off` kHz lands in
+   the ear. ONE formula — the audio, the meter, and the RST all share it. */
+LP.selectivity = (off, bw) => Math.exp(-(off * off) / (2 * Math.pow(Math.max(bw, 0.35) * 0.9, 2)));
 
 /* seeded PRNG for stable texture */
 LP.mulberry = (seed) => () => {

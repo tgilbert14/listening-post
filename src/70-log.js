@@ -36,7 +36,7 @@ LP.log = (() => {
     const st = LP.band.stations.find(s => s.id === id);
     if (!st) return '';
     const off = Math.abs(LP.rx.vfo - st.f);
-    const sel = Math.exp(-(off * off) / (2 * Math.pow(Math.max(st.bw, 0.35) * 0.9, 2)));
+    const sel = LP.selectivity(off, st.bw);
     const s = LP.clamp(Math.round(1 + LP.band.strength(st, t) * sel * 8), 1, 9);
     const r = LP.clamp(Math.round(2 + sel * 3), 1, 5);
     const cw = st.type === 'beacon' || st.type === 'crossing' || st.type === 'constant';
@@ -120,6 +120,10 @@ LP.log = (() => {
   /* a reload inside the 9s window must not eat the capstone entry */
   if (netDone && !seen.has('ALL STATIONS')) add('ALL STATIONS', 0, 'the net acknowledged you', 'net');
 
+  /* it asked who was there. ONCE. A visitor it has already met is never
+     stalked again — the book remembers, so the band remembers. */
+  if (seen.has('THE OTHER')) LP.band.ghost.state = 'gone';
+
   /* lock detection: near a station's carrier, signal present, held ~4s */
   function check(t) {
     let candidate = null;
@@ -152,5 +156,10 @@ LP.log = (() => {
     /* the lock light means SIGNAL, not proximity: a station in its dead
        window doesn't light the readout */
     get lockedOn() { return (lockedOn && lastCheckT - lastActive < 3000) ? lockedOn.id : null; },
+    /* how far along the pencil is: 0..1 across the hold that logs a NEW station */
+    get lockProgress() {
+      if (!lockedOn || seen.has(lockedOn.id) || lastCheckT - lastActive >= 3000) return 0;
+      return LP.clamp((lastCheckT - lockT0) / 4200, 0, 1);
+    },
   };
 })();

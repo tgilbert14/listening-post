@@ -131,6 +131,14 @@ a.skip:focus-visible {
 .station-id.on { opacity: 1; }
 .freq .khz { font-size: .38em; color: var(--phos-text); letter-spacing: .2em; margin-left: 6px; }
 .freq.locked { color: var(--amber); text-shadow: 0 0 16px rgba(217,164,65,.5); }
+/* the pencil line: a hold-to-log in progress, drawing itself */
+.lockbar {
+  height: 2px; width: 0%;
+  margin-top: 3px; border-radius: 1px;
+  background: var(--amber);
+  box-shadow: 0 0 6px rgba(217,164,65,.6);
+  transition: width .2s linear;
+}
 
 /* the dial: a brushed tuning strip */
 #dial {
@@ -212,6 +220,7 @@ button.chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px
   max-height: calc(100vh - 200px);
   overflow: auto;
   background: linear-gradient(180deg, #14191662, #10141362);
+  -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
   border: 1px solid #2b332e;
   border-radius: 8px;
@@ -315,7 +324,7 @@ button.chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px
 }
 .qsl .sig {
   text-align: right; font-family: var(--serif); font-style: italic;
-  color: #6a746c; font-size: 12.5px; margin: 10px 0 12px;
+  color: #4f5852; font-size: 12.5px; margin: 10px 0 12px; /* 4.9:1 on the card stock */
 }
 .qsl-close {
   display: block; margin: 0 auto;
@@ -347,6 +356,8 @@ body.arriving .masthead, body.arriving .panel { opacity: 0; }
   font-variant: small-caps; letter-spacing: .18em;
   color: var(--pencil); font-size: 15px; font-family: var(--serif);
 }
+.brochure .visit { margin-top: 2vmin; font-size: 12px; }
+.brochure a { color: var(--amber); }
 
 @media (prefers-reduced-motion: reduce) {
   .develop, .logbook { transition: none; }
@@ -356,7 +367,34 @@ body.arriving .masthead, body.arriving .panel { opacity: 0; }
 @media (forced-colors: active) {
   button.chip, #dial { border: 1px solid ButtonText; }
   #dial::after { background: Highlight; forced-color-adjust: none; }
-  button.chip[aria-pressed="true"] { border: 3px double Highlight; forced-color-adjust: none; color: Highlight; }
+  /* state lives on the BORDER; text keeps the system's own guaranteed
+     contrast in dark and light high-contrast themes alike */
+  button.chip[aria-pressed="true"] { border: 3px double SelectedItem; }
+}
+
+/* touch: fingers get honest targets */
+@media (pointer: coarse) {
+  button.chip { min-height: 44px; }
+}
+
+/* deep zoom / tiny viewports: the fixed room becomes a page that SCROLLS —
+   400% zoom must never lock a control out of reach (WCAG 1.4.10) */
+@media (max-height: 480px), (max-width: 340px) {
+  html, body { overflow: auto; }
+  body::before { display: none; }
+  .masthead { position: static; padding: 12px 16px 0; }
+  .rig {
+    position: static;
+    min-height: 100vh; height: auto;
+    padding: 10px 3vw 18px;
+  }
+  .glass { min-height: 240px; }
+  .develop, .logbook, .opcard {
+    position: static;
+    margin: 10px auto;
+    max-height: none;
+    transform: none;
+  }
 }
 
 /* phones: stack the panel */

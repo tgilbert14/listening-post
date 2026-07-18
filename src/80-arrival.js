@@ -5,22 +5,28 @@
     if (!LP.rm.matches) document.body.classList.add('arriving');
 
     LP.display.boot();
+    const landing = LP.rx.vfo; /* where the set settles — captured before any glide rewinds the dial */
 
     /* the engine is alive: hand the controls over */
     document.querySelectorAll('button[disabled]').forEach(b => { b.disabled = false; });
 
-    if (!LP.rm.matches) {
-      setTimeout(() => document.body.classList.remove('arriving'), 900);
-      /* first visit only: the operator's card is clipped to the rig, and the
-         set glides the last nudge into the music — the dial teaches itself */
-      if (!LP.store.get('visited', false)) {
-        LP.store.set('visited', true);
-        setTimeout(() => { if (LP.showCard) LP.showCard(true, false); }, 1200);
+    if (!LP.rm.matches) setTimeout(() => document.body.classList.remove('arriving'), 900);
+
+    /* first visit only: the operator's card is clipped to the rig — for EVERY
+       first visitor, moving or still — and (motion permitting) the set glides
+       the last nudge into the music, so the dial teaches itself */
+    if (!LP.store.get('visited', false)) {
+      LP.store.set('visited', true);
+      setTimeout(() => { if (LP.showCard) LP.showCard(true, false); }, 1200);
+      if (!LP.rm.matches) {
         const from = LP.rx.vfo - 9, to = LP.rx.vfo;
         const t0 = performance.now();
+        let lastSet = from;
         const glide = () => {
+          if (Math.abs(LP.rx.vfo - lastSet) > 0.001) return false; /* the visitor took the dial: theirs */
           const p = Math.min(1, (performance.now() - t0) / 2600);
-          LP.rx.vfo = from + (to - from) * (1 - Math.pow(1 - p, 3));
+          lastSet = from + (to - from) * (1 - Math.pow(1 - p, 3));
+          LP.rx.vfo = lastSet;
           if (LP.display.invalidateRow) LP.display.invalidateRow();
           if (p < 1) return; /* stay in the ticker till landed */
           LP.rx.dwellT0 = performance.now();
@@ -33,7 +39,7 @@
     }
 
     setTimeout(() => {
-      LP.say(`A shortwave receiver, three bands. Arrow keys tune; 1, 2, 3 change band; L opens the station log. Currently ${LP.rx.vfo.toFixed(1)} kilohertz.`);
+      LP.say(`A shortwave receiver, three bands. Arrow keys tune; 1, 2, 3 change band; L opens the station log. Currently ${landing.toFixed(1)} kilohertz.`);
     }, 1400);
   } catch (err) {
     console.error(err);
