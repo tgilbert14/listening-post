@@ -7,6 +7,7 @@
   const tags = document.getElementById('tag-count');
   const splat = document.getElementById('screen-splat');
   const title = document.querySelector('.masthead h1');
+  const release = document.getElementById('box-release');
   let boxOn = false, titleTaps = 0, lastVfo = 0, alertUntil = 0, lastActivity = performance.now(), idleCall = false;
 
   function call(who, line, state = 'PRIORITY CALL') {
@@ -23,13 +24,18 @@
     alertState.textContent = 'NORMAL'; alertState.classList.remove('hot'); alertCard.classList.remove('on');
   }
 
-  if (box) box.addEventListener('click', () => {
-    boxOn = !boxOn; document.body.classList.toggle('box-mode', boxOn);
+  function setBox(next, announce = true) {
+    boxOn = !!next; document.body.classList.toggle('box-mode', boxOn);
     box.setAttribute('aria-pressed', String(boxOn)); box.textContent = boxOn ? 'Unbox' : 'Box';
-    call(boxOn ? 'RAVEN' : 'VESPER', boxOn
-      ? 'Perfect camouflage. Remain absolutely still. The radio cabinet has never seen a cardboard box before.'
-      : 'You abandoned the box. Command has recorded a catastrophic loss of corrugated assets.', 'ITEM EQUIPPED');
-  });
+    LP.audio?.setMissionMuffle?.(boxOn);
+    dispatchEvent(new CustomEvent('lp:box', { detail: { on: boxOn } }));
+    if (LP.mission && LP.mission.active) LP.mission.onBox(boxOn);
+    else if (announce) call(boxOn ? 'RAVEN' : 'VESPER', boxOn
+        ? 'Perfect camouflage. Remain absolutely still. The radio cabinet has never seen a cardboard box before.'
+        : 'You abandoned the box. Command has recorded a catastrophic loss of corrugated assets.', 'ITEM EQUIPPED');
+  }
+  if (box) box.addEventListener('click', () => setBox(!boxOn));
+  if (release) release.addEventListener('click', () => setBox(false));
 
   if (title) title.addEventListener('click', () => {
     titleTaps++;
@@ -68,13 +74,20 @@
   LP.ticker.add(() => {
     if (!LP.rx) return;
     const now = performance.now(), v = LP.rx.vfo;
-    if (lastVfo && Math.abs(v - lastVfo) > 3.5 && now > alertUntil) setAlert('DIAL PANIC');
+    if (lastVfo && Math.abs(v - lastVfo) > 3.5 && now > alertUntil) {
+      if (LP.mission && LP.mission.active) LP.mission.dialPanic(Math.abs(v - lastVfo));
+      else setAlert('DIAL PANIC');
+    }
     lastVfo = v;
-    if (alertUntil && now > alertUntil) { alertUntil = 0; clearAlert(); }
-    if (LP.log && tags) tags.textContent = String(new Set(LP.log.entries.map(x => x.id)).size).padStart(2, '0');
+    if ((!LP.mission || !LP.mission.active) && alertUntil && now > alertUntil) { alertUntil = 0; clearAlert(); }
+    if (LP.log && tags) {
+      const count = LP.mission && LP.mission.active ? LP.mission.tags : new Set(LP.log.entries.map(x => x.id)).size;
+      tags.textContent = String(count).padStart(2, '0');
+    }
     if (!idleCall && LP.engaged && now - lastActivity > 45000) {
       idleCall = true;
       call('???', 'You have been staring at static for forty-five seconds. Excellent. The simulation says you are ready for management.', 'WELLNESS CHECK');
     }
   });
+  LP.easter = { setBox, setAlert, clearAlert, get boxOn() { return boxOn; } };
 })();

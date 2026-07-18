@@ -1,6 +1,6 @@
 /* THE LISTENING POST — service worker. Cache the receiver and comms portraits, serve
    it, refresh it in the background. The receiver works with the wire cut. */
-const CACHE = 'listening-post-v4';
+const CACHE = 'listening-post-v6';
 const PAGES = ['./', './index.html', './manifest.webmanifest', './operator-comms.png'];
 
 self.addEventListener('install', (e) => {

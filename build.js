@@ -12,6 +12,7 @@ const parts = [
   '02-shell.css',
   '03-body.html',
   '10-boot.js',
+  '15-title.js',
   '20-band.js',
   '30-audio.js',
   '40-waterfall.js',
@@ -21,6 +22,7 @@ const parts = [
   '70-log.js',
   '75-comms.js',
   '76-easter.js',
+  '77-mission.js',
   '80-arrival.js',
 ];
 

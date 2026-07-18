@@ -6,6 +6,14 @@ const check = (name, ok, detail = '') => {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  — ' + detail : ''}`);
   if (!ok) fails++;
 };
+const enterMission = async (page) => {
+  if (!await page.$('#title-screen:not([hidden])')) return;
+  await page.click('#mission-start');
+  await page.waitForTimeout(1100);
+  const response = await page.$('#codec-choices button');
+  if (response) await response.click();
+  await page.waitForTimeout(150);
+};
 
 (async () => {
   const browser = await chromium.launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {});
@@ -22,6 +30,7 @@ const check = (name, ok, detail = '') => {
   const pressed = await page.evaluate(() =>
     [0, 1, 2].map((i) => document.getElementById('band-' + i).getAttribute('aria-pressed')));
   check('fresh visit: SKY chip pressed, GROUND not', pressed[1] === 'true' && pressed[0] === 'false', JSON.stringify(pressed));
+  await enterMission(page);
 
   // M1b: documented '2' key is not a dead no-op semantically — '1' switches to GROUND
   await page.keyboard.press('1');
@@ -122,31 +131,34 @@ const check = (name, ok, detail = '') => {
 
   await page.close();
 
-  // M8: the trap scenario proper — FRESH page, first-ever action is clicking
-  // the Sound chip while it reads OFF: sound must come ON, not bank an opt-out
+  // M8: the cover's START gesture is now the first real interaction. It must
+  // arm sound rather than silently banking an opt-out before the receiver opens.
   const ctxTrap = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   const pt = await ctxTrap.newPage();
   await pt.goto(URL);
   await pt.waitForTimeout(2500);
   const preShown = await pt.evaluate(() => document.getElementById('sound-toggle').getAttribute('aria-pressed'));
-  await pt.click('#sound-toggle');
+  await pt.click('#mission-start');
   await pt.waitForTimeout(900);
   const trap = await pt.evaluate(() => ({
     pressed: document.getElementById('sound-toggle').getAttribute('aria-pressed'),
     stored: localStorage.getItem('lp-sound'),
   }));
-  check('first-ever Sound click enables (no silent opt-out)',
-    preShown === 'false' && trap.stored === 'true' && trap.pressed === 'true',
+  check('first-ever START gesture enables sound (no silent opt-out)',
+    preShown === 'false' && trap.stored !== 'false' && trap.pressed === 'true',
     `preShown=${preShown} then ${JSON.stringify(trap)}`);
   await ctxTrap.close();
 
-  // reduced-motion first visit gets the operator's card
+  // reduced-motion uses the new cover for onboarding and skips its transition
   const p3 = await browser.newPage({ viewport: { width: 1280, height: 800 } });
   await p3.emulateMedia({ reducedMotion: 'reduce' });
   await p3.goto(URL);
   await p3.waitForTimeout(2500);
-  const cardShown = await p3.evaluate(() => !document.getElementById('opcard').hidden);
-  check('reduced-motion first visit still gets onboarding card', cardShown);
+  const coverShown = await p3.evaluate(() => !document.getElementById('title-screen').hidden);
+  await p3.click('#mission-start');
+  await p3.waitForTimeout(100);
+  const coverGone = await p3.evaluate(() => document.getElementById('title-screen').hidden);
+  check('reduced-motion cover onboards and opens without animation', coverShown && coverGone);
   await p3.close();
 
   // deep zoom reflow: 320x240 viewport must scroll, not clip

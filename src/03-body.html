@@ -1,5 +1,26 @@
 <a class="sr-only skip" href="#dial">Skip to the dial</a>
 
+<section class="title-screen" id="title-screen" aria-labelledby="title-logo">
+  <div class="title-grid" aria-hidden="true"></div>
+  <div class="title-dossier">
+    <p class="title-studio">DESERT DATA LABS // SIMULATION 02</p>
+    <p class="title-class">TOP SECRET · SIGNAL INTELLIGENCE</p>
+    <h1 id="title-logo">NIGHT<br>GLASS</h1>
+    <p class="title-genre">TACTICAL FREQUENCY ACTION</p>
+    <div class="title-mission">
+      <span>MISSION / 01</span>
+      <strong>THE BAND IS OPEN</strong>
+      <small>Infiltrate the spectrum. Identify the source. Do not trust the pigeon.</small>
+    </div>
+    <button class="title-intercept" id="title-intercept" aria-label="Answer an incoming call on frequency 140.85">
+      <span>INCOMING CALL</span><strong>140.85</strong><small>PTT // UNKNOWN ORIGIN</small>
+    </button>
+    <button id="mission-start">START MISSION <kbd>ENTER</kbd></button>
+    <p class="title-record" id="title-record" aria-live="polite"></p>
+    <p class="title-legal">UNAUTHORIZED LISTENING IS EXTREMELY ENCOURAGED · BUILD 140.85</p>
+  </div>
+</section>
+
 <header class="masthead">
   <p class="eyebrow"><span class="live-dot"></span> Desert Data Labs · Tactical Signal Unit</p>
   <h1>The Listening Post</h1>
@@ -7,14 +28,37 @@
 </header>
 
 <aside class="mission-hud" aria-label="Current mission">
-  <p class="mission-kicker"><b id="alert-state">NORMAL</b> · OPERATION <strong>NIGHT GLASS</strong> · TAGS <em id="tag-count">00</em></p>
-  <p class="mission-copy"><span>01</span> Locate an active carrier <span>02</span> Hold signal for four seconds <span>03</span> Log the transmission</p>
+  <p class="mission-kicker"><b id="alert-state">NORMAL</b> · OPERATION <strong>NIGHT GLASS</strong> · TAGS <em id="tag-count">00</em> · <time id="mission-clock">00:00</time></p>
+  <p class="mission-copy"><span id="objective-index">01</span> <b id="objective-live">ACQUIRE ANY ACTIVE CARRIER</b></p>
+  <div class="suspicion" aria-label="Trace level"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+</aside>
+
+<aside class="compact-hud" aria-label="Compact tactical status">
+  <div class="compact-portrait" aria-hidden="true"></div>
+  <div><span id="compact-state">NORMAL</span><strong id="compact-objective">ACQUIRE AN ACTIVE CARRIER</strong><small>NG-01 · <b id="compact-tags">00</b> TAGS · <time id="compact-clock">00:00</time></small></div>
+  <div class="compact-radar" aria-hidden="true"><i></i></div>
 </aside>
 
 <main class="rig">
+  <aside class="hud-rail hud-left" aria-label="Mission support">
+    <div class="rail-portrait rail-vesper" id="support-portrait" aria-hidden="true"></div>
+    <p class="rail-label">SUPPORT LINK</p>
+    <strong id="support-name">VESPER</strong>
+    <span id="support-frequency">140.85</span>
+    <dl><div><dt>NODE</dt><dd id="support-node">SKY</dd></div><div><dt>STATUS</dt><dd id="support-status">LIVE</dd></div><div><dt>KEY</dt><dd id="support-key">NONE</dd></div></dl>
+  </aside>
+
   <div class="glass">
     <canvas id="waterfall" aria-hidden="true"></canvas>
   </div>
+
+  <aside class="hud-rail hud-right" aria-label="Tactical overview">
+    <p class="rail-label">TACTICAL VIEW</p>
+    <div class="rail-radar" id="mission-radar" aria-hidden="true"><i></i><b></b><em></em></div>
+    <strong id="tactical-state">SEARCHING</strong>
+    <span id="tactical-detail">NO HOSTILES*</span>
+    <p class="rail-foot" id="tactical-foot">*PIGEON STATUS<br>UNCONFIRMED</p>
+  </aside>
 
   <div class="panel">
     <div class="freq-stack">
@@ -40,7 +84,7 @@
       <button class="chip" id="log-toggle" disabled aria-expanded="false" aria-controls="logbook">Log</button>
       <button class="chip codec-chip" id="codec-toggle" disabled aria-expanded="false" aria-controls="codec">Comms</button>
       <button class="chip" id="box-toggle" disabled aria-pressed="false">Box</button>
-      <button class="chip" id="card-toggle" disabled aria-expanded="false" aria-controls="opcard">Card</button>
+      <button class="chip" id="card-toggle" disabled aria-expanded="false" aria-controls="opcard">Dossier</button>
       <button class="chip" id="sound-toggle" disabled aria-pressed="false">Sound</button>
       <input class="vol" id="vol" type="range" min="0" max="100" value="85" aria-label="Volume">
     </div>
@@ -50,6 +94,15 @@
     <div class="qsl">
       <h2>Operation Night Glass</h2>
       <p class="what">A shortwave receiver. Everything on it is transmitting <em>right now</em> — except the pigeon. Nobody authorized the pigeon.</p>
+      <div class="dossier-live">
+        <span>CURRENT OBJECTIVE</span>
+        <strong id="dossier-objective">ACQUIRE ANY ACTIVE CARRIER</strong>
+        <small id="dossier-seed">DAILY SEED —</small>
+      </div>
+      <div class="dossier-evidence">
+        <span>RECOVERED EVIDENCE</span>
+        <ol id="evidence-list"><li>NO EVIDENCE FILED</li></ol>
+      </div>
       <ul>
         <li><strong>Tune</strong> — drag the glass or the dial. Fling it and the dial coasts. The wheel is fine tuning; arrow keys work too.</li>
         <li>The band is <em>crowded</em> — most lines are strangers passing through. The steady, <strong>named</strong> ones reward holding: lock one and it's pencilled into the log (<kbd>L</kbd>).</li>
@@ -58,7 +111,7 @@
         <li>Some of the band only wakes after dark. <em>Your</em> dark — and some nights, something crosses that isn't there the next.</li>
         <li><strong>Field equipment</strong> — COMMS offers advice. BOX offers a box. Command insists both are mission-critical.</li>
       </ul>
-      <p class="sig">— the last operator</p>
+      <p class="sig">FILED BY VESPER // 140.85</p>
       <button id="card-close" class="qsl-close">Back to the band</button>
     </div>
   </section>
@@ -85,8 +138,13 @@
   <p class="sr-only" role="status" aria-live="polite" id="sr-status"></p>
   <p class="sr-only" role="status" aria-live="polite" id="sr-tune"></p>
   <div class="mission-alert" id="mission-alert" aria-hidden="true"><strong>!</strong><span>ALERT</span></div>
-  <div class="box-camo" id="box-camo" aria-hidden="true"><span>DESERT DATA<br>PRECISION RECEIVER PARTS<br><small>THIS SIDE PROBABLY UP</small></span></div>
+  <div class="box-camo" id="box-camo" aria-hidden="true">
+    <span>DESERT DATA<br>PRECISION RECEIVER PARTS<br><small>THIS SIDE PROBABLY UP</small></span>
+    <p id="box-stealth">CAMOUFLAGE INTEGRITY 00%</p>
+    <button id="box-release" type="button">PEEK / REMOVE BOX</button>
+  </div>
   <div class="screen-splat" id="screen-splat" aria-hidden="true"></div>
+  <div class="anomaly-flash" id="anomaly-flash" role="status" aria-live="assertive"></div>
 
   <section class="codec" id="codec" role="dialog" aria-modal="true" aria-labelledby="codec-title" hidden>
     <div class="codec-frame">
@@ -95,7 +153,7 @@
         <div class="codec-center">
           <div class="codec-ptt"><b>PTT</b><small id="codec-status">INCOMING</small></div>
           <div class="codec-meter"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
-          <div class="codec-frequency">140.85</div>
+          <div class="codec-frequency" id="codec-frequency">140.85</div>
           <div class="codec-memory"><span>▼ mem.</span><span>◀ tune ▶</span></div>
         </div>
         <div class="codec-portrait portrait-field"><span>RAVEN</span></div>
@@ -103,11 +161,37 @@
       <div class="codec-copy">
         <p class="codec-speaker" id="codec-title">VESPER</p>
         <p id="codec-message">The receiver is live. Sweep the band, acquire a carrier, and hold it steady. Every transmission is happening now.</p>
+        <div class="codec-choices" id="codec-choices" aria-label="Call responses"></div>
       </div>
+      <nav class="codec-directory" aria-label="Codec memory">
+        <button type="button" data-codec-contact="VESPER"><span>01</span> VESPER <b>140.85</b></button>
+        <button type="button" data-codec-contact="RAVEN"><span>02</span> RAVEN <b>141.12</b></button>
+        <button type="button" data-codec-contact="UNKNOWN" id="codec-unknown"><span>03</span> ??? <b>---.--</b></button>
+      </nav>
       <div class="codec-actions">
         <span>● SECURE LINK / 140.85</span>
         <button id="codec-close">END <kbd>ESC</kbd></button>
       </div>
+    </div>
+  </section>
+
+  <section class="debrief" id="debrief" role="dialog" aria-modal="true" aria-labelledby="debrief-title" hidden>
+    <div class="debrief-frame">
+      <p>OPERATION NIGHT GLASS // AFTER-ACTION REPORT</p>
+      <h2 id="debrief-title">MISSION COMPLETE</h2>
+      <div class="debrief-rank"><span>FINAL RANK</span><strong id="debrief-rank">—</strong><small id="debrief-subtitle">TACTICAL LISTENER</small></div>
+      <dl>
+        <div><dt>SCORE</dt><dd id="debrief-score">0000</dd></div>
+        <div><dt>TIME</dt><dd id="debrief-time">00:00</dd></div>
+        <div><dt>EVIDENCE</dt><dd id="debrief-evidence">00</dd></div>
+        <div><dt>ALERTS</dt><dd id="debrief-alerts">00</dd></div>
+      </dl>
+      <p class="debrief-ending" id="debrief-ending"></p>
+      <div class="debrief-actions">
+        <button id="debrief-continue" type="button">CONTINUE LISTENING</button>
+        <button id="debrief-replay" type="button">REPLAY OPERATION</button>
+      </div>
+      <small id="debrief-seed">MISSION SEED —</small>
     </div>
   </section>
 

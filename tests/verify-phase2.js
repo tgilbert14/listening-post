@@ -6,6 +6,14 @@ const check = (name, ok, detail = '') => {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  — ' + String(detail).slice(0, 160) : ''}`);
   if (!ok) fails++;
 };
+const enterMission = async (page) => {
+  if (!await page.$('#title-screen:not([hidden])')) return;
+  await page.click('#mission-start');
+  await page.waitForTimeout(1100);
+  const response = await page.$('#codec-choices button');
+  if (response) await response.click();
+  await page.waitForTimeout(150);
+};
 
 (async () => {
   const browser = await chromium.launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {});
@@ -135,6 +143,7 @@ const check = (name, ok, detail = '') => {
   });
   await page.reload();
   await page.waitForTimeout(2500);
+  await enterMission(page);
   await page.keyboard.press('l');
   await page.waitForTimeout(600);
   const beforeJump = await page.evaluate(() => ({ band: LP.rx.band, vfo: LP.rx.vfo }));
