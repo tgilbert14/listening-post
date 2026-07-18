@@ -24,14 +24,14 @@
 /* THE LISTENING POST — tokens. A radio room at 3 AM: near-black chassis,
    phosphor green display glass, one amber pilot-lamp accent, pencil grey. */
 :root {
-  --void: #050807;           /* the room */
-  --chassis: #101413;        /* receiver metal */
-  --chassis-2: #181d1b;      /* raised panel */
-  --phos: #6fdd8b;           /* phosphor trace */
-  --phos-dim: #2e5c3c;       /* phosphor afterglow — decoration only */
-  --phos-text: #55a86e;      /* phosphor at reading contrast (4.6:1 on the void) */
-  --phos-bright: #c9ffd4;    /* saturated peak */
-  --amber: #d9a441;          /* pilot lamp / tuned lock */
+  --void: #010504;           /* the room */
+  --chassis: #07100e;        /* receiver metal */
+  --chassis-2: #0b1513;      /* raised panel */
+  --phos: #68ad9d;           /* codec phosphor */
+  --phos-dim: #28564e;       /* phosphor afterglow — decoration only */
+  --phos-text: #5b9b8d;      /* phosphor at reading contrast */
+  --phos-bright: #b8ddd4;    /* saturated peak */
+  --amber: #92a882;          /* tuned lock */
   --pencil: #9aa39c;         /* engraved + pencil entries */
   --pencil-dim: #5c655e;     /* decoration only */
   --pencil-text: #838d85;    /* dim engraving that still reads (4.5:1) */
@@ -91,6 +91,16 @@ a.skip:focus-visible {
 .masthead {
   position: fixed; top: 24px; left: 30px; z-index: 30;
 }
+.live-dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--danger); box-shadow:0 0 10px var(--danger); animation:livePulse 1.4s steps(2) infinite; }
+@keyframes livePulse { 50% { opacity:.25; } }
+.mission-hud { position:fixed; z-index:30; top:24px; right:30px; width:min(48vw,560px); text-align:right; text-transform:uppercase; }
+.mission-kicker { color:var(--pencil-text); font-size:9px; letter-spacing:.26em; }
+.mission-kicker strong { color:var(--amber); font-weight:400; }
+.mission-kicker b { color:var(--phos); font-weight:400; }
+.mission-kicker b.hot { color:#ff5448; text-shadow:0 0 12px #ff2517; animation:livePulse .25s steps(2) infinite; }
+.mission-kicker em { color:var(--phos-bright); font-style:normal; }
+.mission-copy { margin-top:8px; color:var(--phos-text); font-size:9px; letter-spacing:.12em; white-space:nowrap; }
+.mission-copy span { color:var(--amber); margin-left:13px; }
 .masthead .eyebrow {
   font-size: 10px; letter-spacing: .34em;
   color: var(--pencil-text);
@@ -98,11 +108,11 @@ a.skip:focus-visible {
   margin-bottom: 7px;
 }
 .masthead h1 {
-  font-family: var(--serif);
+  font-family: var(--mono);
   font-size: clamp(20px, 3vmin, 28px);
   font-weight: 400;
-  font-variant: small-caps;
-  letter-spacing: .14em;
+  font-variant: normal;
+  letter-spacing: .22em;
   color: var(--pencil);
 }
 .masthead .sub {
@@ -127,7 +137,7 @@ a.skip:focus-visible {
    is a machined ring; the tube face curves; the phosphor is under glass. */
 .glass {
   position: relative;
-  border-radius: 12px;
+  border-radius: 0;
   background: #05100b;
   border: 1px solid #2b3a31;
   box-shadow:
@@ -182,9 +192,9 @@ a.skip:focus-visible {
   background:
     radial-gradient(60% 120% at 16% 120%, rgba(217,164,65,.06) 0%, transparent 60%),
     repeating-linear-gradient(90deg, rgba(255,255,255,.012) 0 2px, rgba(0,0,0,.012) 2px 4px),
-    linear-gradient(180deg, #1b211e, #0e1210);
-  border: 1px solid #2b332e;
-  border-radius: 12px;
+    linear-gradient(180deg, #0b1513, #030806);
+  border: 1px solid #294c45;
+  border-radius: 0;
   padding: 16px 22px;
   box-shadow:
     0 20px 54px rgba(0,0,0,.62),
@@ -238,7 +248,7 @@ a.skip:focus-visible {
   grid-area: dial;
   position: relative;
   height: 46px;
-  border-radius: 6px;
+  border-radius: 0;
   background:
     repeating-linear-gradient(90deg, rgba(0,0,0,.35) 0 1px, transparent 1px 4px, rgba(255,255,255,.05) 4px 5px, transparent 5px 8px),
     linear-gradient(180deg, #10130f 0%, #2b332d 22%, #333c35 50%, #232a26 78%, #0e120f 100%);
@@ -268,9 +278,9 @@ button.chip {
   font-family: var(--mono);
   font-size: 10px; letter-spacing: .22em; text-transform: uppercase;
   color: var(--pencil);
-  background: linear-gradient(180deg, #1a201d, #10140f);
-  border: 1px solid #2f382f;
-  border-radius: 6px;
+  background: #030908;
+  border: 1px solid #294c45;
+  border-radius: 0;
   padding: 9px 14px 8px;
   cursor: pointer;
   box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 1px 2px rgba(0,0,0,.5);
@@ -394,6 +404,60 @@ input.vol:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; 
   overflow: auto;
   overscroll-behavior: contain;
 }
+
+/* secure radio call: sparse 480i-era PTT console, built from the user's reference */
+.codec { position:fixed; inset:0; z-index:90; display:grid; place-items:center; padding:20px; background:rgba(0,3,3,.94); }
+.codec[hidden] { display:none; }
+.codec-frame { width:min(900px,96vw); color:#559485; background:#010605; border:2px solid #0d6970; box-shadow:0 0 0 1px #001d21,0 28px 100px #000,inset 0 0 90px rgba(18,80,73,.08); padding:34px 58px 22px; position:relative; overflow:hidden; }
+.codec-frame::after { content:''; position:absolute; inset:0; pointer-events:none; z-index:8; background:repeating-linear-gradient(0deg,transparent 0 2px,rgba(0,0,0,.38) 2px 3px),linear-gradient(90deg,transparent,rgba(82,145,125,.025),transparent); }
+.codec-console { position:relative; z-index:2; min-height:210px; display:grid; grid-template-columns:205px 1fr 205px; border:1px solid #294c45; }
+.codec-console::before,.codec-console::after { content:''; position:absolute; top:0; bottom:0; width:1px; background:#182e2a; }
+.codec-console::before { left:-13px; }.codec-console::after { right:-13px; }
+.codec-portrait { min-width:0; position:relative; margin:-22px 32px -22px; background-image:linear-gradient(rgba(16,58,49,.18),rgba(0,5,4,.3)),url('operator-comms.png'); background-size:200% 100%; filter:contrast(1.04) saturate(.72) brightness(.78); image-rendering:auto; opacity:.82; border-left:1px solid #142e29; border-right:1px solid #142e29; }
+.portrait-field { background-position:left center; grid-column:3; grid-row:1; }
+.portrait-control { background-position:right center; grid-column:1; grid-row:1; }
+.codec-portrait span { position:absolute; left:50%; bottom:9px; transform:translateX(-50%); color:#5e988a; font-size:8px; letter-spacing:.25em; opacity:.7; }
+.codec-center { grid-column:2; grid-row:1; display:grid; grid-template-columns:112px 1fr; grid-template-rows:46px 1fr 29px; position:relative; border-left:1px solid #294c45; border-right:1px solid #294c45; background:#020807; }
+.codec-ptt { grid-column:1 / -1; display:flex; justify-content:space-between; align-items:center; padding:0 17px; border-bottom:1px solid #294c45; text-transform:uppercase; letter-spacing:.12em; }
+.codec-ptt b { font-size:16px; font-weight:700; color:#477f73; }.codec-ptt small { font-size:7px; color:#3f7065; animation:livePulse 1s steps(2) infinite; }
+.codec-meter { align-self:center; padding:0 16px; display:flex; flex-direction:column-reverse; gap:3px; }
+.codec-meter i { display:block; height:8px; background:#528f80; animation:pttBars .78s steps(4) infinite alternate; }
+.codec-meter i:nth-child(2n){animation-delay:-.2s}.codec-meter i:nth-child(3n){animation-delay:-.55s}
+@keyframes pttBars { to { opacity:.16; transform:scaleX(.54); transform-origin:left; } }
+.codec-frequency { align-self:center; color:#70c5b1; text-align:center; font-size:29px; letter-spacing:.16em; text-shadow:0 0 10px rgba(82,157,138,.28); font-variant-numeric:tabular-nums; }
+.codec-memory { grid-column:1 / -1; display:flex; justify-content:space-between; align-items:center; padding:0 13px; border-top:1px solid #294c45; color:#3f7468; font-size:8px; letter-spacing:.18em; text-transform:lowercase; }
+.codec-copy { position:relative; z-index:2; margin-top:30px; padding:24px 34px 27px; min-height:150px; border:1px solid #294c45; background:rgba(0,4,4,.78); text-align:center; display:grid; align-content:center; }
+.codec-speaker { color:#77b6a8; font-size:10px; letter-spacing:.3em; margin-bottom:15px; }
+#codec-message { max-width:66ch; margin:0 auto; color:#d3ded9; line-height:1.62; letter-spacing:.015em; font-size:17px; }
+.codec-actions { position:relative; z-index:9; display:flex; justify-content:space-between; align-items:center; padding:14px 1px 0; color:#345e56; font-size:8px; letter-spacing:.2em; text-transform:uppercase; }
+.codec-actions button { cursor:pointer; color:#517f74; border:1px solid #294c45; background:#010605; padding:8px 12px; font:9px var(--mono); letter-spacing:.12em; }
+.codec-actions kbd { color:var(--amber); margin-left:8px; }
+.codec-actions button:hover,.codec-actions button:focus-visible { color:#b8d8d0; border-color:#5b9a8c; outline:none; box-shadow:0 0 14px rgba(68,128,116,.18); }
+
+/* unnecessary tactical systems */
+.mission-alert { position:fixed; z-index:80; top:16%; right:5vw; display:flex; align-items:center; gap:12px; color:#ff6258; font-size:15px; letter-spacing:.35em; text-shadow:0 0 14px #f22; opacity:0; transform:translateY(-12px); transition:.12s; pointer-events:none; }
+.mission-alert strong { display:grid; place-items:center; width:48px; height:48px; border:3px solid #ff6258; font-size:34px; line-height:1; background:#180302; box-shadow:0 0 20px #f22,inset 0 0 14px #f22; }
+.mission-alert.on { opacity:1; transform:none; animation:alertJitter .12s steps(2) infinite; }
+@keyframes alertJitter { 50% { transform:translate(2px,-1px); } }
+
+.box-camo { display:none; position:fixed; inset:17% 8% 0; z-index:70; background:repeating-linear-gradient(90deg,rgba(60,40,18,.14) 0 2px,transparent 2px 7px),#8a6840; border:14px solid #624624; box-shadow:0 -14px 0 #a37b49,0 0 80px #000,inset 0 0 90px rgba(39,23,8,.45); clip-path:polygon(5% 0,95% 0,100% 9%,98% 100%,2% 100%,0 9%); }
+.box-camo::before,.box-camo::after { content:''; position:absolute; top:21%; width:18%; height:4%; background:#0b0906; box-shadow:inset 0 0 10px #000; }
+.box-camo::before { left:25%; transform:rotate(-4deg); }.box-camo::after { right:25%; transform:rotate(4deg); }
+.box-camo > span { position:absolute; left:7%; bottom:9%; color:#3e2b18; font:bold 18px/1.45 var(--mono); letter-spacing:.12em; transform:rotate(-2deg); border:4px double #4c351d; padding:12px 16px; }
+.box-camo small { font-size:9px; }
+body.box-mode .box-camo { display:block; animation:boxDrop .24s steps(4); }
+@keyframes boxDrop { from { transform:translateY(-80%); } }
+
+.pixel-gull { position:fixed; z-index:60; top:20%; left:-80px; color:#d9e8d6; background:transparent; border:0; font:bold 22px var(--mono); letter-spacing:-.4em; cursor:crosshair; image-rendering:pixelated; text-shadow:4px 4px #2c4a32; }
+.pixel-gull.fly { animation:gullFlight 16s steps(48) forwards; }
+@keyframes gullFlight { 0%{transform:translate(0,0)} 28%{transform:translate(35vw,9vh) rotate(-7deg)} 62%{transform:translate(72vw,-3vh) rotate(6deg)} 100%{transform:translate(112vw,12vh)} }
+.screen-splat { position:fixed; z-index:75; inset:0; pointer-events:none; opacity:0; background:radial-gradient(ellipse at 52% 35%,rgba(235,239,203,.88) 0 2%,rgba(116,125,80,.75) 3%,transparent 8%),radial-gradient(ellipse at 47% 42%,rgba(235,239,203,.75) 0 1.5%,transparent 5%),radial-gradient(ellipse at 58% 46%,rgba(235,239,203,.65) 0 1%,transparent 4%); transition:opacity .12s; }
+.screen-splat.on { opacity:1; }
+
+body.deep-fried { filter:contrast(1.55) saturate(1.7); }
+body.deep-fried .glass { transform:skewX(-.5deg); }
+body.vr-party { --phos:#75e7ff; --phos-dim:#3559a6; --phos-text:#8f8fe8; --phos-bright:#ffe875; --amber:#ff79d1; }
+body.vr-party::after { content:'VR TRAINING // DEFINITELY CALIBRATED'; position:fixed; z-index:65; left:50%; top:11%; transform:translateX(-50%); color:#ffe875; background:#302070; padding:7px 12px; font:10px var(--mono); letter-spacing:.18em; box-shadow:5px 5px 0 #ff79d1; }
 .opcard .qsl { animation: qslIn .45s cubic-bezier(.2,.9,.25,1); }
 @keyframes qslIn {
   from { opacity: 0; transform: translateX(26px) rotate(-.5deg); }
@@ -493,6 +557,8 @@ body.arriving .masthead, body.arriving .panel { opacity: 0; }
 @media (prefers-reduced-motion: reduce) {
   .develop, .logbook { transition: none; }
   .masthead, .panel, .glass { transition: none; }
+  .pixel-gull.fly { animation-duration:60s; }
+  .mission-alert.on { animation:none; }
 }
 
 @media (forced-colors: active) {
@@ -534,6 +600,22 @@ body.arriving .masthead, body.arriving .panel { opacity: 0; }
   .rig { padding: 66px 3vw 12px; gap: 10px; }
   .masthead { top: 12px; left: 16px; }
   .masthead .sub { display: none; }
+  .mission-hud { display:none; }
+  .mission-alert { top:8%; right:12px; }
+  .box-camo { inset:12% 2% 0; }
+  .box-camo > span { font-size:12px; }
+  .codec { padding:8px; }
+  .codec-frame { padding:23px 12px 14px; }
+  .codec-console { min-height:150px; grid-template-columns:88px 1fr 88px; }
+  .codec-portrait { margin:-10px 8px; }
+  .codec-center { grid-template-columns:45px 1fr; grid-template-rows:34px 1fr 23px; }
+  .codec-ptt { padding:0 7px; }.codec-ptt b { font-size:11px; }.codec-ptt small { display:none; }
+  .codec-meter { padding:0 7px; gap:2px; }.codec-meter i { height:5px; }
+  .codec-frequency { font-size:17px; }
+  .codec-memory { padding:0 5px; font-size:6px; }
+  .codec-copy { margin-top:20px; padding:18px 14px; min-height:132px; }
+  #codec-message { font-size:13px; }
+  .codec-actions > span { display:none; }
   .panel {
     grid-template-columns: auto 1fr;
     grid-template-areas:
@@ -564,10 +646,15 @@ body.arriving .masthead, body.arriving .panel { opacity: 0; }
 <a class="sr-only skip" href="#dial">Skip to the dial</a>
 
 <header class="masthead">
-  <p class="eyebrow">Desert Data Labs</p>
+  <p class="eyebrow"><span class="live-dot"></span> Desert Data Labs · Tactical Signal Unit</p>
   <h1>The Listening Post</h1>
   <p class="sub" id="sub-line">The band is open</p>
 </header>
+
+<aside class="mission-hud" aria-label="Current mission">
+  <p class="mission-kicker"><b id="alert-state">NORMAL</b> · OPERATION <strong>NIGHT GLASS</strong> · TAGS <em id="tag-count">00</em></p>
+  <p class="mission-copy"><span>01</span> Locate an active carrier <span>02</span> Hold signal for four seconds <span>03</span> Log the transmission</p>
+</aside>
 
 <main class="rig">
   <div class="glass">
@@ -596,6 +683,8 @@ body.arriving .masthead, body.arriving .panel { opacity: 0; }
       <button class="chip" id="zoom-toggle" disabled aria-label="Span: 48 kilohertz. Zoom the window.">48 kHz</button>
       <button class="chip" id="sb-toggle" disabled aria-label="Sideband: upper. Press to switch.">USB</button>
       <button class="chip" id="log-toggle" disabled aria-expanded="false" aria-controls="logbook">Log</button>
+      <button class="chip codec-chip" id="codec-toggle" disabled aria-expanded="false" aria-controls="codec">Comms</button>
+      <button class="chip" id="box-toggle" disabled aria-pressed="false">Box</button>
       <button class="chip" id="card-toggle" disabled aria-expanded="false" aria-controls="opcard">Card</button>
       <button class="chip" id="sound-toggle" disabled aria-pressed="false">Sound</button>
       <input class="vol" id="vol" type="range" min="0" max="100" value="85" aria-label="Volume">
@@ -604,14 +693,15 @@ body.arriving .masthead, body.arriving .panel { opacity: 0; }
 
   <section class="opcard" id="opcard" aria-label="Operator's card" hidden>
     <div class="qsl">
-      <h2>The Listening Post</h2>
-      <p class="what">A shortwave receiver. Everything on it is transmitting <em>right now</em> — nothing is recorded.</p>
+      <h2>Operation Night Glass</h2>
+      <p class="what">A shortwave receiver. Everything on it is transmitting <em>right now</em> — except the pigeon. Nobody authorized the pigeon.</p>
       <ul>
         <li><strong>Tune</strong> — drag the glass or the dial. Fling it and the dial coasts. The wheel is fine tuning; arrow keys work too.</li>
         <li>The band is <em>crowded</em> — most lines are strangers passing through. The steady, <strong>named</strong> ones reward holding: lock one and it's pencilled into the log (<kbd>L</kbd>).</li>
         <li><strong>Zoom</strong> the window with <kbd>Z</kbd> — narrow the span and the keying resolves into readable dots and dashes.</li>
         <li><strong>Three bands</strong> — <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>. The strip at the top of the glass is the whole band; tap it to jump.</li>
         <li>Some of the band only wakes after dark. <em>Your</em> dark — and some nights, something crosses that isn't there the next.</li>
+        <li><strong>Field equipment</strong> — COMMS offers advice. BOX offers a box. Command insists both are mission-critical.</li>
       </ul>
       <p class="sig">— the last operator</p>
       <button id="card-close" class="qsl-close">Back to the band</button>
@@ -639,6 +729,32 @@ body.arriving .masthead, body.arriving .panel { opacity: 0; }
 
   <p class="sr-only" role="status" aria-live="polite" id="sr-status"></p>
   <p class="sr-only" role="status" aria-live="polite" id="sr-tune"></p>
+  <div class="mission-alert" id="mission-alert" aria-hidden="true"><strong>!</strong><span>ALERT</span></div>
+  <div class="box-camo" id="box-camo" aria-hidden="true"><span>DESERT DATA<br>PRECISION RECEIVER PARTS<br><small>THIS SIDE PROBABLY UP</small></span></div>
+  <div class="screen-splat" id="screen-splat" aria-hidden="true"></div>
+
+  <section class="codec" id="codec" role="dialog" aria-modal="true" aria-labelledby="codec-title" hidden>
+    <div class="codec-frame">
+      <div class="codec-console" aria-hidden="true">
+        <div class="codec-portrait portrait-control"><span>VESPER</span></div>
+        <div class="codec-center">
+          <div class="codec-ptt"><b>PTT</b><small id="codec-status">INCOMING</small></div>
+          <div class="codec-meter"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          <div class="codec-frequency">140.85</div>
+          <div class="codec-memory"><span>▼ mem.</span><span>◀ tune ▶</span></div>
+        </div>
+        <div class="codec-portrait portrait-field"><span>RAVEN</span></div>
+      </div>
+      <div class="codec-copy">
+        <p class="codec-speaker" id="codec-title">VESPER</p>
+        <p id="codec-message">The receiver is live. Sweep the band, acquire a carrier, and hold it steady. Every transmission is happening now.</p>
+      </div>
+      <div class="codec-actions">
+        <span>● SECURE LINK / 140.85</span>
+        <button id="codec-close">END <kbd>ESC</kbd></button>
+      </div>
+    </div>
+  </section>
 
   <noscript>
     <div class="brochure">
@@ -4055,6 +4171,168 @@ LP.log = (() => {
       return LP.clamp((lastCheckT - lockT0) / 4200, 0, 1);
     },
   };
+})();
+
+
+'use strict';
+/* THE LISTENING POST — secure comms. Fiction wrapped around the real receiver. */
+(() => {
+  const panel = document.getElementById('codec');
+  const toggle = document.getElementById('codec-toggle');
+  const close = document.getElementById('codec-close');
+  const msg = document.getElementById('codec-message');
+  const speaker = document.getElementById('codec-title');
+  const status = document.getElementById('codec-status');
+  if (!panel || !toggle || !close) return;
+
+  const calls = {
+    'THE LATTICE': ['VESPER', 'That sequence is structured, not random. Copy every group exactly. The key changes with the date.'],
+    'THE FORECAST': ['VESPER', 'Machine traffic acquired. Shift is one-seven-zero hertz. The message describes places that do not officially exist.'],
+    'AURORA': ['RAVEN', 'Music, through two thousand miles of ionosphere. Someone chose that record for a listener they cannot see.'],
+    'POSTCARD': ['VESPER', 'Image carrier. Stay on frequency until the final scan line. Bad tuning will scar the picture.'],
+    'WEFAX': ['VESPER', 'Weather facsimile. Hold position and let the chart develop. The pressure systems are tied to today’s sky.'],
+    'HOMECOMING': ['RAVEN', 'Eleven tones. Night traffic only. I have heard them before, but never from the same direction.'],
+    'THE CROSSING': ['RAVEN', 'A bell at six-six-six-zero. Do not chase it. Log the time and listen for what follows.'],
+    'THE PIPS': ['VESPER', 'Time reference confirmed. Five short, one long. Use it to measure everything else that drifts.']
+  };
+  const intro = ['VESPER', 'The receiver is live. Sweep the band, acquire a carrier, and hold it steady. Every transmission is happening now.'];
+  const nuisance = [
+    ['VESPER', 'You called to ask if the COMMS button works. It works. End transmission.'],
+    ['RAVEN', 'I am hiding inside a radio cabinet. It is a highly advanced cabinet.'],
+    ['VESPER', 'Mission update: the frequency is still a number. Intelligence is analyzing this development.'],
+    ['RAVEN', 'Do not eat the tuning knob. This instruction was added after an incident.'],
+    ['???', 'A waveform dreams of being a rectangle. A rectangle dreams of being a cardboard box.'],
+    ['VESPER', 'You have contacted me six times without changing frequency. I have logged this as a tactical decision.']
+  ];
+  let previousFocus = null, lastLock = null;
+  let manualCalls = 0;
+  const heard = new Set();
+
+  function chirp() {
+    try {
+      const C = window.AudioContext || window.webkitAudioContext;
+      const ac = new C(), gain = ac.createGain(), osc = ac.createOscillator();
+      osc.type = 'square'; osc.frequency.setValueAtTime(880, ac.currentTime); osc.frequency.exponentialRampToValueAtTime(440, ac.currentTime + .11);
+      gain.gain.setValueAtTime(.0001, ac.currentTime); gain.gain.exponentialRampToValueAtTime(.055, ac.currentTime + .01); gain.gain.exponentialRampToValueAtTime(.0001, ac.currentTime + .15);
+      osc.connect(gain).connect(ac.destination); osc.start(); osc.stop(ac.currentTime + .16); osc.onended = () => ac.close();
+    } catch { /* visual alert still works */ }
+  }
+  function show(data = intro, state = 'CONNECTED') {
+    previousFocus = document.activeElement;
+    speaker.textContent = data[0]; msg.textContent = data[1]; status.textContent = state;
+    panel.hidden = false; toggle.setAttribute('aria-expanded', 'true');
+    chirp(); requestAnimationFrame(() => close.focus());
+    LP.say(`Secure call from ${data[0]}. ${data[1]}`);
+  }
+  function hide() {
+    if (panel.hidden) return;
+    panel.hidden = true; toggle.setAttribute('aria-expanded', 'false');
+    if (previousFocus && previousFocus.focus) previousFocus.focus(); else toggle.focus();
+  }
+  toggle.addEventListener('click', () => {
+    if (!panel.hidden) return hide();
+    const data = manualCalls ? nuisance[Math.min(manualCalls - 1, nuisance.length - 1)] : intro;
+    manualCalls++;
+    show(data, manualCalls > 1 ? 'UNSOLICITED ADVICE' : 'CONNECTED');
+  });
+  close.addEventListener('click', hide);
+  panel.addEventListener('click', e => { if (e.target === panel) hide(); });
+  addEventListener('keydown', e => { if (e.key === 'Escape' && !panel.hidden) { e.preventDefault(); hide(); } });
+
+  LP.ticker.add(() => {
+    if (!LP.log) return;
+    const lock = LP.log.lockedOn;
+    if (lock !== lastLock) {
+      lastLock = lock;
+      if (lock && calls[lock] && !heard.has(lock)) {
+        heard.add(lock);
+        setTimeout(() => { if (document.hidden || !panel.hidden) return; show(calls[lock], 'SIGNAL ACQUIRED'); }, 650);
+      }
+    }
+  });
+  LP.comms = { show, hide, calls };
+})();
+
+
+'use strict';
+/* NIGHT GLASS — unnecessary tactical systems. Every serious system deserves a silly edge case. */
+(() => {
+  const box = document.getElementById('box-toggle');
+  const alertState = document.getElementById('alert-state');
+  const alertCard = document.getElementById('mission-alert');
+  const tags = document.getElementById('tag-count');
+  const splat = document.getElementById('screen-splat');
+  const title = document.querySelector('.masthead h1');
+  let boxOn = false, titleTaps = 0, lastVfo = 0, alertUntil = 0, lastActivity = performance.now(), idleCall = false;
+
+  function call(who, line, state = 'PRIORITY CALL') {
+    if (LP.comms) LP.comms.show([who, line], state);
+  }
+  function setAlert(text = 'ALERT', ms = 1900) {
+    alertState.textContent = text;
+    alertState.classList.add('hot');
+    alertCard.querySelector('span').textContent = text;
+    alertCard.classList.add('on');
+    alertUntil = performance.now() + ms;
+  }
+  function clearAlert() {
+    alertState.textContent = 'NORMAL'; alertState.classList.remove('hot'); alertCard.classList.remove('on');
+  }
+
+  if (box) box.addEventListener('click', () => {
+    boxOn = !boxOn; document.body.classList.toggle('box-mode', boxOn);
+    box.setAttribute('aria-pressed', String(boxOn)); box.textContent = boxOn ? 'Unbox' : 'Box';
+    call(boxOn ? 'RAVEN' : 'VESPER', boxOn
+      ? 'Perfect camouflage. Remain absolutely still. The radio cabinet has never seen a cardboard box before.'
+      : 'You abandoned the box. Command has recorded a catastrophic loss of corrugated assets.', 'ITEM EQUIPPED');
+  });
+
+  if (title) title.addEventListener('click', () => {
+    titleTaps++;
+    if (titleTaps === 3) call('VESPER', 'Stop tapping the operation title. It is laminated, not interactive.', 'DISCIPLINARY CALL');
+    if (titleTaps === 6) {
+      document.body.classList.toggle('deep-fried');
+      call('???', 'DISPLAY DRIVER DEFEATED. THE PIXELS ARE NOW OPERATING WITHOUT SUPERVISION.', 'PACKET FAILED SUCCESSFULLY');
+      titleTaps = 0;
+    }
+  });
+
+  const secret = ['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','b','a'];
+  let secretAt = 0;
+  addEventListener('keydown', e => {
+    lastActivity = performance.now();
+    const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    secretAt = key === secret[secretAt] ? secretAt + 1 : (key === secret[0] ? 1 : 0);
+    if (secretAt === secret.length) {
+      secretAt = 0; document.body.classList.toggle('vr-party');
+      call('RAVEN', 'Training mode unlocked. There is no training mode. The colors changed, though, so the budget was approved.', 'VR SIMULATION(?)');
+    }
+  });
+  for (const event of ['pointerdown','wheel','touchstart']) addEventListener(event, () => { lastActivity = performance.now(); }, { passive:true });
+
+  /* A tiny gull. Clicking it is discouraged by every department except the Easter egg department. */
+  const gull = document.createElement('button');
+  gull.className = 'pixel-gull'; gull.type = 'button'; gull.setAttribute('aria-label', 'Suspicious pixel bird'); gull.textContent = '<v';
+  document.body.appendChild(gull);
+  gull.addEventListener('click', () => {
+    gull.classList.remove('fly'); splat.classList.add('on'); setAlert('BIRD CONTACT', 2600);
+    call('VESPER', 'You made direct contact with local wildlife. Your screen has received the consequences.', 'FAUNA INCIDENT');
+    setTimeout(() => splat.classList.remove('on'), 7000);
+  });
+  setTimeout(() => gull.classList.add('fly'), 12000);
+
+  LP.ticker.add(() => {
+    if (!LP.rx) return;
+    const now = performance.now(), v = LP.rx.vfo;
+    if (lastVfo && Math.abs(v - lastVfo) > 3.5 && now > alertUntil) setAlert('DIAL PANIC');
+    lastVfo = v;
+    if (alertUntil && now > alertUntil) { alertUntil = 0; clearAlert(); }
+    if (LP.log && tags) tags.textContent = String(new Set(LP.log.entries.map(x => x.id)).size).padStart(2, '0');
+    if (!idleCall && LP.engaged && now - lastActivity > 45000) {
+      idleCall = true;
+      call('???', 'You have been staring at static for forty-five seconds. Excellent. The simulation says you are ready for management.', 'WELLNESS CHECK');
+    }
+  });
 })();
 
 

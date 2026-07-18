@@ -19,6 +19,8 @@ const parts = [
   '55-wefax.js',
   '60-interact.js',
   '70-log.js',
+  '75-comms.js',
+  '76-easter.js',
   '80-arrival.js',
 ];
 

@@ -14,6 +14,16 @@ weather — a daily geomagnetic index, dayside flares, sporadic-E openings. Ligh
 broadband on the glass and in your ears at the same moment. The set rides its own **AGC**, so a
 strong carrier pulls the floor down and the band swells back when it lets go.
 
+The receiver is now framed as **Operation Night Glass**. A secure COMMS channel connects the
+listener to two original field operators, Raven and Vesper. Acquiring significant stations can
+trigger terse encrypted calls with station-specific clues; the calls use original portrait art
+and a tiny synthesized connection chirp, with full keyboard and reduced-motion support.
+The deliberately crunchy codec portraits are rendered like enlarged 96-pixel console textures.
+Repeated calls reveal increasingly useless advice; reckless tuning trips an alert; the BOX is
+an objectively perfect hiding place; a suspicious pixel gull crosses the room; repeated title
+taps corrupt the display; forty-five seconds of inactivity earns a management promotion; and a
+famous ten-key sequence unlocks a VR simulation that definitely passed calibration.
+
 The band is **inhabited**. Under the named stations runs an underbrush of dozens of minor
 signals — weak CW ragchews, drifting carriers, splatter — seeded fresh each day, never named,
 never logged. They exist so the named stations are discoveries in a crowd, not exhibits in an

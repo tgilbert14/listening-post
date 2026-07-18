@@ -1,10 +1,15 @@
 <a class="sr-only skip" href="#dial">Skip to the dial</a>
 
 <header class="masthead">
-  <p class="eyebrow">Desert Data Labs</p>
+  <p class="eyebrow"><span class="live-dot"></span> Desert Data Labs · Tactical Signal Unit</p>
   <h1>The Listening Post</h1>
   <p class="sub" id="sub-line">The band is open</p>
 </header>
+
+<aside class="mission-hud" aria-label="Current mission">
+  <p class="mission-kicker"><b id="alert-state">NORMAL</b> · OPERATION <strong>NIGHT GLASS</strong> · TAGS <em id="tag-count">00</em></p>
+  <p class="mission-copy"><span>01</span> Locate an active carrier <span>02</span> Hold signal for four seconds <span>03</span> Log the transmission</p>
+</aside>
 
 <main class="rig">
   <div class="glass">
@@ -33,6 +38,8 @@
       <button class="chip" id="zoom-toggle" disabled aria-label="Span: 48 kilohertz. Zoom the window.">48 kHz</button>
       <button class="chip" id="sb-toggle" disabled aria-label="Sideband: upper. Press to switch.">USB</button>
       <button class="chip" id="log-toggle" disabled aria-expanded="false" aria-controls="logbook">Log</button>
+      <button class="chip codec-chip" id="codec-toggle" disabled aria-expanded="false" aria-controls="codec">Comms</button>
+      <button class="chip" id="box-toggle" disabled aria-pressed="false">Box</button>
       <button class="chip" id="card-toggle" disabled aria-expanded="false" aria-controls="opcard">Card</button>
       <button class="chip" id="sound-toggle" disabled aria-pressed="false">Sound</button>
       <input class="vol" id="vol" type="range" min="0" max="100" value="85" aria-label="Volume">
@@ -41,14 +48,15 @@
 
   <section class="opcard" id="opcard" aria-label="Operator's card" hidden>
     <div class="qsl">
-      <h2>The Listening Post</h2>
-      <p class="what">A shortwave receiver. Everything on it is transmitting <em>right now</em> — nothing is recorded.</p>
+      <h2>Operation Night Glass</h2>
+      <p class="what">A shortwave receiver. Everything on it is transmitting <em>right now</em> — except the pigeon. Nobody authorized the pigeon.</p>
       <ul>
         <li><strong>Tune</strong> — drag the glass or the dial. Fling it and the dial coasts. The wheel is fine tuning; arrow keys work too.</li>
         <li>The band is <em>crowded</em> — most lines are strangers passing through. The steady, <strong>named</strong> ones reward holding: lock one and it's pencilled into the log (<kbd>L</kbd>).</li>
         <li><strong>Zoom</strong> the window with <kbd>Z</kbd> — narrow the span and the keying resolves into readable dots and dashes.</li>
         <li><strong>Three bands</strong> — <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd>. The strip at the top of the glass is the whole band; tap it to jump.</li>
         <li>Some of the band only wakes after dark. <em>Your</em> dark — and some nights, something crosses that isn't there the next.</li>
+        <li><strong>Field equipment</strong> — COMMS offers advice. BOX offers a box. Command insists both are mission-critical.</li>
       </ul>
       <p class="sig">— the last operator</p>
       <button id="card-close" class="qsl-close">Back to the band</button>
@@ -76,6 +84,32 @@
 
   <p class="sr-only" role="status" aria-live="polite" id="sr-status"></p>
   <p class="sr-only" role="status" aria-live="polite" id="sr-tune"></p>
+  <div class="mission-alert" id="mission-alert" aria-hidden="true"><strong>!</strong><span>ALERT</span></div>
+  <div class="box-camo" id="box-camo" aria-hidden="true"><span>DESERT DATA<br>PRECISION RECEIVER PARTS<br><small>THIS SIDE PROBABLY UP</small></span></div>
+  <div class="screen-splat" id="screen-splat" aria-hidden="true"></div>
+
+  <section class="codec" id="codec" role="dialog" aria-modal="true" aria-labelledby="codec-title" hidden>
+    <div class="codec-frame">
+      <div class="codec-console" aria-hidden="true">
+        <div class="codec-portrait portrait-control"><span>VESPER</span></div>
+        <div class="codec-center">
+          <div class="codec-ptt"><b>PTT</b><small id="codec-status">INCOMING</small></div>
+          <div class="codec-meter"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          <div class="codec-frequency">140.85</div>
+          <div class="codec-memory"><span>▼ mem.</span><span>◀ tune ▶</span></div>
+        </div>
+        <div class="codec-portrait portrait-field"><span>RAVEN</span></div>
+      </div>
+      <div class="codec-copy">
+        <p class="codec-speaker" id="codec-title">VESPER</p>
+        <p id="codec-message">The receiver is live. Sweep the band, acquire a carrier, and hold it steady. Every transmission is happening now.</p>
+      </div>
+      <div class="codec-actions">
+        <span>● SECURE LINK / 140.85</span>
+        <button id="codec-close">END <kbd>ESC</kbd></button>
+      </div>
+    </div>
+  </section>
 
   <noscript>
     <div class="brochure">
